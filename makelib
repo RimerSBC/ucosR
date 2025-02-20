@@ -1,0 +1,18 @@
+#!/bin/zsh
+OBJDIR="release"
+LIBDIR="lib"
+if [ ! -d $LIBDIR ]; then
+  mkdir $LIBDIR
+fi
+rm $LIBDIR/*.a
+arm-none-eabi-ar -rcs $LIBDIR/libbios.a $OBJDIR/bios*.o
+arm-none-eabi-ar -rcs $LIBDIR/librshell.a $OBJDIR/rshell*.o
+arm-none-eabi-ar -rcs $LIBDIR/libkernel.a $OBJDIR/kernel*.o
+arm-none-eabi-ar -rcs $LIBDIR/libllfs.a $OBJDIR/llfs*.o
+arm-none-eabi-ar -rcs $LIBDIR/libff.a $OBJDIR/ff*.o
+arm-none-eabi-ar -rcs $LIBDIR/libsd_mmc.a $OBJDIR/sd_mmc*.o
+arm-none-eabi-ar -rcs $LIBDIR/libfonts.a $OBJDIR/fonts*.o
+
+arm-none-eabi-ar -rcs $LIBDIR/libucosR.a $OBJDIR/bios*.o $OBJDIR/rshell*.o $OBJDIR/kernel*.o $OBJDIR/llfs*.o $OBJDIR/ff*.o $OBJDIR/sd_mmc*.o $OBJDIR/src_ucosR.c.o $OBJDIR/fonts_font*.o
+
+#arm-none-eabi-ranlib $LIBDIR/*.a

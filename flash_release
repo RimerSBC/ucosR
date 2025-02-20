@@ -1,0 +1,4 @@
+#!/bin/zsh
+JLINKSCRIPT=ucosR_release.jlink
+/opt/local/bin/jlink -device ATSAME53J19 -if SWD -speed 5000 -autoconnect 1 -CommanderScript $JLINKSCRIPT
+

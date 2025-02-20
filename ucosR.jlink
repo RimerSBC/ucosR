@@ -1,0 +1,5 @@
+loadfile debug/ucosR.hex
+r
+g
+power on
+exit

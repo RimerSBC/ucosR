@@ -1,0 +1,5 @@
+loadfile release/ucosR.hex
+r
+g
+power on
+exit

@@ -1,0 +1,3 @@
+#!/bin/zsh
+/opt/local/bin/jlinkgdb -device cortex-m4 -if SWD -speed 5000
+
