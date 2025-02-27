@@ -63,15 +63,15 @@ AS       := /Applications/arm/bin/arm-none-eabi-as
 ##
 CodeLiteDir:=/Applications/codelite.app/Contents/SharedSupport/
 shell:=zsh
-Objects0=$(IntermediateDirectory)/kernel_croutine.c$(ObjectSuffix) $(IntermediateDirectory)/src_main.c$(ObjectSuffix) $(IntermediateDirectory)/bios_dmactrl.c$(ObjectSuffix) $(IntermediateDirectory)/bios_tstring.c$(ObjectSuffix) $(IntermediateDirectory)/kernel_tasks.c$(ObjectSuffix) $(IntermediateDirectory)/fonts_font_zx8x8.c$(ObjectSuffix) $(IntermediateDirectory)/kernel_port.c$(ObjectSuffix) 
+Objects0=$(IntermediateDirectory)/kernel_croutine.c$(ObjectSuffix) $(IntermediateDirectory)/src_main.c$(ObjectSuffix) $(IntermediateDirectory)/bios_dmactrl.c$(ObjectSuffix) $(IntermediateDirectory)/bios_tstring.c$(ObjectSuffix) $(IntermediateDirectory)/kernel_tasks.c$(ObjectSuffix) $(IntermediateDirectory)/fonts_font_zx8x8.c$(ObjectSuffix) $(IntermediateDirectory)/kernel_port.c$(ObjectSuffix) $(IntermediateDirectory)/kernel_list.c$(ObjectSuffix) 
 
-Objects1=$(IntermediateDirectory)/kernel_list.c$(ObjectSuffix) $(IntermediateDirectory)/kernel_stream_buffer.c$(ObjectSuffix) $(IntermediateDirectory)/bios_lcd.c$(ObjectSuffix) \
+Objects1=$(IntermediateDirectory)/kernel_stream_buffer.c$(ObjectSuffix) $(IntermediateDirectory)/bios_lcd.c$(ObjectSuffix) \
 	$(IntermediateDirectory)/rshell_rshell.c$(ObjectSuffix) $(IntermediateDirectory)/fonts_font_serif8x8.c$(ObjectSuffix) $(IntermediateDirectory)/kernel_event_groups.c$(ObjectSuffix) $(IntermediateDirectory)/rshell_uterm.c$(ObjectSuffix) $(IntermediateDirectory)/sd_mmc_hal_mci_sync.c$(ObjectSuffix) $(IntermediateDirectory)/kernel_heap_4r.c$(ObjectSuffix) $(IntermediateDirectory)/rshell_iface_util.c$(ObjectSuffix) $(IntermediateDirectory)/fonts_font_speedway8x8.c$(ObjectSuffix) $(IntermediateDirectory)/llfs_llfs_vol_eeprom.c$(ObjectSuffix) $(IntermediateDirectory)/llfs_llfs.c$(ObjectSuffix) \
-	$(IntermediateDirectory)/kernel_queue.c$(ObjectSuffix) $(IntermediateDirectory)/bios_i2c_port.c$(ObjectSuffix) $(IntermediateDirectory)/rshell_editline.c$(ObjectSuffix) $(IntermediateDirectory)/rshell_iface_sys.c$(ObjectSuffix) $(IntermediateDirectory)/rshell_sys_config.c$(ObjectSuffix) $(IntermediateDirectory)/bios_bsp.c$(ObjectSuffix) $(IntermediateDirectory)/src_iface_sd.c$(ObjectSuffix) $(IntermediateDirectory)/rshell_commandline.c$(ObjectSuffix) $(IntermediateDirectory)/bios_sys_sercom.c$(ObjectSuffix) $(IntermediateDirectory)/bios_graph.c$(ObjectSuffix) \
-	$(IntermediateDirectory)/bios_syscalls.c$(ObjectSuffix) $(IntermediateDirectory)/ff_fat.c$(ObjectSuffix) $(IntermediateDirectory)/rshell_red.c$(ObjectSuffix) $(IntermediateDirectory)/ff_ffsystem.c$(ObjectSuffix) $(IntermediateDirectory)/bios_icons.c$(ObjectSuffix) $(IntermediateDirectory)/fonts_font_rimer6x8.c$(ObjectSuffix) $(IntermediateDirectory)/sd_mmc_sd_mmc.c$(ObjectSuffix) $(IntermediateDirectory)/ff_ff.c$(ObjectSuffix) $(IntermediateDirectory)/kernel_timers.c$(ObjectSuffix) $(IntermediateDirectory)/bios_keyboard.c$(ObjectSuffix) \
-	$(IntermediateDirectory)/fonts_font_rimer8x12.c$(ObjectSuffix) $(IntermediateDirectory)/ff_ffunicode.c$(ObjectSuffix) $(IntermediateDirectory)/sd_mmc_hpl_sdhc.c$(ObjectSuffix) 
+	$(IntermediateDirectory)/kernel_queue.c$(ObjectSuffix) $(IntermediateDirectory)/bios_i2c_port.c$(ObjectSuffix) $(IntermediateDirectory)/rshell_editline.c$(ObjectSuffix) $(IntermediateDirectory)/rshell_iface_sys.c$(ObjectSuffix) $(IntermediateDirectory)/rshell_sys_config.c$(ObjectSuffix) $(IntermediateDirectory)/bios_bsp.c$(ObjectSuffix) $(IntermediateDirectory)/rshell_commandline.c$(ObjectSuffix) $(IntermediateDirectory)/bios_sys_sercom.c$(ObjectSuffix) $(IntermediateDirectory)/bios_graph.c$(ObjectSuffix) $(IntermediateDirectory)/bios_syscalls.c$(ObjectSuffix) \
+	$(IntermediateDirectory)/ff_ffsystem.c$(ObjectSuffix) $(IntermediateDirectory)/rshell_colours.c$(ObjectSuffix) $(IntermediateDirectory)/ff_ffunicode.c$(ObjectSuffix) $(IntermediateDirectory)/src_ucosR.c$(ObjectSuffix) $(IntermediateDirectory)/ff_fat.c$(ObjectSuffix) $(IntermediateDirectory)/rshell_red.c$(ObjectSuffix) $(IntermediateDirectory)/bios_icons.c$(ObjectSuffix) $(IntermediateDirectory)/fonts_font_rimer6x8.c$(ObjectSuffix) $(IntermediateDirectory)/sd_mmc_sd_mmc.c$(ObjectSuffix) $(IntermediateDirectory)/ff_ff.c$(ObjectSuffix) \
+	$(IntermediateDirectory)/kernel_timers.c$(ObjectSuffix) $(IntermediateDirectory)/bios_keyboard.c$(ObjectSuffix) $(IntermediateDirectory)/fonts_font_rimer8x12.c$(ObjectSuffix) $(IntermediateDirectory)/sd_mmc_hpl_sdhc.c$(ObjectSuffix) $(IntermediateDirectory)/src_iface_sd.c$(ObjectSuffix) 
 
-Objects2=$(IntermediateDirectory)/src_startup.c$(ObjectSuffix) $(IntermediateDirectory)/rshell_colours.c$(ObjectSuffix) $(IntermediateDirectory)/src_ucosR.c$(ObjectSuffix) $(IntermediateDirectory)/ff_diskio.c$(ObjectSuffix) 
+Objects2=$(IntermediateDirectory)/src_startup.c$(ObjectSuffix) $(IntermediateDirectory)/ff_diskio.c$(ObjectSuffix) 
 
 
 
@@ -267,12 +267,6 @@ $(IntermediateDirectory)/bios_bsp.c$(ObjectSuffix): bios/bsp.c
 $(IntermediateDirectory)/bios_bsp.c$(PreprocessSuffix): bios/bsp.c
 	$(CC) $(CFLAGS) $(IncludePath) $(PreprocessOnlySwitch) $(OutputSwitch) $(IntermediateDirectory)/bios_bsp.c$(PreprocessSuffix) bios/bsp.c
 
-$(IntermediateDirectory)/src_iface_sd.c$(ObjectSuffix): src/iface_sd.c
-	@$(CC) $(CFLAGS) $(IncludePath) -MG -MP -MT$(IntermediateDirectory)/src_iface_sd.c$(ObjectSuffix) -MF$(IntermediateDirectory)/src_iface_sd.c$(DependSuffix) -MM src/iface_sd.c
-	$(CC) $(SourceSwitch) "/Users/sergey/projloc/ucosR/src/iface_sd.c" $(CFLAGS) $(ObjectSwitch)$(IntermediateDirectory)/src_iface_sd.c$(ObjectSuffix) $(IncludePath)
-$(IntermediateDirectory)/src_iface_sd.c$(PreprocessSuffix): src/iface_sd.c
-	$(CC) $(CFLAGS) $(IncludePath) $(PreprocessOnlySwitch) $(OutputSwitch) $(IntermediateDirectory)/src_iface_sd.c$(PreprocessSuffix) src/iface_sd.c
-
 $(IntermediateDirectory)/rshell_commandline.c$(ObjectSuffix): rshell/commandline.c
 	@$(CC) $(CFLAGS) $(IncludePath) -MG -MP -MT$(IntermediateDirectory)/rshell_commandline.c$(ObjectSuffix) -MF$(IntermediateDirectory)/rshell_commandline.c$(DependSuffix) -MM rshell/commandline.c
 	$(CC) $(SourceSwitch) "/Users/sergey/projloc/ucosR/rshell/commandline.c" $(CFLAGS) $(ObjectSwitch)$(IntermediateDirectory)/rshell_commandline.c$(ObjectSuffix) $(IncludePath)
@@ -297,6 +291,30 @@ $(IntermediateDirectory)/bios_syscalls.c$(ObjectSuffix): bios/syscalls.c
 $(IntermediateDirectory)/bios_syscalls.c$(PreprocessSuffix): bios/syscalls.c
 	$(CC) $(CFLAGS) $(IncludePath) $(PreprocessOnlySwitch) $(OutputSwitch) $(IntermediateDirectory)/bios_syscalls.c$(PreprocessSuffix) bios/syscalls.c
 
+$(IntermediateDirectory)/ff_ffsystem.c$(ObjectSuffix): ff/ffsystem.c
+	@$(CC) $(CFLAGS) $(IncludePath) -MG -MP -MT$(IntermediateDirectory)/ff_ffsystem.c$(ObjectSuffix) -MF$(IntermediateDirectory)/ff_ffsystem.c$(DependSuffix) -MM ff/ffsystem.c
+	$(CC) $(SourceSwitch) "/Users/sergey/projloc/ucosR/ff/ffsystem.c" $(CFLAGS) $(ObjectSwitch)$(IntermediateDirectory)/ff_ffsystem.c$(ObjectSuffix) $(IncludePath)
+$(IntermediateDirectory)/ff_ffsystem.c$(PreprocessSuffix): ff/ffsystem.c
+	$(CC) $(CFLAGS) $(IncludePath) $(PreprocessOnlySwitch) $(OutputSwitch) $(IntermediateDirectory)/ff_ffsystem.c$(PreprocessSuffix) ff/ffsystem.c
+
+$(IntermediateDirectory)/rshell_colours.c$(ObjectSuffix): rshell/colours.c
+	@$(CC) $(CFLAGS) $(IncludePath) -MG -MP -MT$(IntermediateDirectory)/rshell_colours.c$(ObjectSuffix) -MF$(IntermediateDirectory)/rshell_colours.c$(DependSuffix) -MM rshell/colours.c
+	$(CC) $(SourceSwitch) "/Users/sergey/projloc/ucosR/rshell/colours.c" $(CFLAGS) $(ObjectSwitch)$(IntermediateDirectory)/rshell_colours.c$(ObjectSuffix) $(IncludePath)
+$(IntermediateDirectory)/rshell_colours.c$(PreprocessSuffix): rshell/colours.c
+	$(CC) $(CFLAGS) $(IncludePath) $(PreprocessOnlySwitch) $(OutputSwitch) $(IntermediateDirectory)/rshell_colours.c$(PreprocessSuffix) rshell/colours.c
+
+$(IntermediateDirectory)/ff_ffunicode.c$(ObjectSuffix): ff/ffunicode.c
+	@$(CC) $(CFLAGS) $(IncludePath) -MG -MP -MT$(IntermediateDirectory)/ff_ffunicode.c$(ObjectSuffix) -MF$(IntermediateDirectory)/ff_ffunicode.c$(DependSuffix) -MM ff/ffunicode.c
+	$(CC) $(SourceSwitch) "/Users/sergey/projloc/ucosR/ff/ffunicode.c" $(CFLAGS) $(ObjectSwitch)$(IntermediateDirectory)/ff_ffunicode.c$(ObjectSuffix) $(IncludePath)
+$(IntermediateDirectory)/ff_ffunicode.c$(PreprocessSuffix): ff/ffunicode.c
+	$(CC) $(CFLAGS) $(IncludePath) $(PreprocessOnlySwitch) $(OutputSwitch) $(IntermediateDirectory)/ff_ffunicode.c$(PreprocessSuffix) ff/ffunicode.c
+
+$(IntermediateDirectory)/src_ucosR.c$(ObjectSuffix): src/ucosR.c
+	@$(CC) $(CFLAGS) $(IncludePath) -MG -MP -MT$(IntermediateDirectory)/src_ucosR.c$(ObjectSuffix) -MF$(IntermediateDirectory)/src_ucosR.c$(DependSuffix) -MM src/ucosR.c
+	$(CC) $(SourceSwitch) "/Users/sergey/projloc/ucosR/src/ucosR.c" $(CFLAGS) $(ObjectSwitch)$(IntermediateDirectory)/src_ucosR.c$(ObjectSuffix) $(IncludePath)
+$(IntermediateDirectory)/src_ucosR.c$(PreprocessSuffix): src/ucosR.c
+	$(CC) $(CFLAGS) $(IncludePath) $(PreprocessOnlySwitch) $(OutputSwitch) $(IntermediateDirectory)/src_ucosR.c$(PreprocessSuffix) src/ucosR.c
+
 $(IntermediateDirectory)/ff_fat.c$(ObjectSuffix): ff/fat.c
 	@$(CC) $(CFLAGS) $(IncludePath) -MG -MP -MT$(IntermediateDirectory)/ff_fat.c$(ObjectSuffix) -MF$(IntermediateDirectory)/ff_fat.c$(DependSuffix) -MM ff/fat.c
 	$(CC) $(SourceSwitch) "/Users/sergey/projloc/ucosR/ff/fat.c" $(CFLAGS) $(ObjectSwitch)$(IntermediateDirectory)/ff_fat.c$(ObjectSuffix) $(IncludePath)
@@ -308,12 +326,6 @@ $(IntermediateDirectory)/rshell_red.c$(ObjectSuffix): rshell/red.c
 	$(CC) $(SourceSwitch) "/Users/sergey/projloc/ucosR/rshell/red.c" $(CFLAGS) $(ObjectSwitch)$(IntermediateDirectory)/rshell_red.c$(ObjectSuffix) $(IncludePath)
 $(IntermediateDirectory)/rshell_red.c$(PreprocessSuffix): rshell/red.c
 	$(CC) $(CFLAGS) $(IncludePath) $(PreprocessOnlySwitch) $(OutputSwitch) $(IntermediateDirectory)/rshell_red.c$(PreprocessSuffix) rshell/red.c
-
-$(IntermediateDirectory)/ff_ffsystem.c$(ObjectSuffix): ff/ffsystem.c
-	@$(CC) $(CFLAGS) $(IncludePath) -MG -MP -MT$(IntermediateDirectory)/ff_ffsystem.c$(ObjectSuffix) -MF$(IntermediateDirectory)/ff_ffsystem.c$(DependSuffix) -MM ff/ffsystem.c
-	$(CC) $(SourceSwitch) "/Users/sergey/projloc/ucosR/ff/ffsystem.c" $(CFLAGS) $(ObjectSwitch)$(IntermediateDirectory)/ff_ffsystem.c$(ObjectSuffix) $(IncludePath)
-$(IntermediateDirectory)/ff_ffsystem.c$(PreprocessSuffix): ff/ffsystem.c
-	$(CC) $(CFLAGS) $(IncludePath) $(PreprocessOnlySwitch) $(OutputSwitch) $(IntermediateDirectory)/ff_ffsystem.c$(PreprocessSuffix) ff/ffsystem.c
 
 $(IntermediateDirectory)/bios_icons.c$(ObjectSuffix): bios/icons.c
 	@$(CC) $(CFLAGS) $(IncludePath) -MG -MP -MT$(IntermediateDirectory)/bios_icons.c$(ObjectSuffix) -MF$(IntermediateDirectory)/bios_icons.c$(DependSuffix) -MM bios/icons.c
@@ -357,35 +369,23 @@ $(IntermediateDirectory)/fonts_font_rimer8x12.c$(ObjectSuffix): fonts/font_rimer
 $(IntermediateDirectory)/fonts_font_rimer8x12.c$(PreprocessSuffix): fonts/font_rimer8x12.c
 	$(CC) $(CFLAGS) $(IncludePath) $(PreprocessOnlySwitch) $(OutputSwitch) $(IntermediateDirectory)/fonts_font_rimer8x12.c$(PreprocessSuffix) fonts/font_rimer8x12.c
 
-$(IntermediateDirectory)/ff_ffunicode.c$(ObjectSuffix): ff/ffunicode.c
-	@$(CC) $(CFLAGS) $(IncludePath) -MG -MP -MT$(IntermediateDirectory)/ff_ffunicode.c$(ObjectSuffix) -MF$(IntermediateDirectory)/ff_ffunicode.c$(DependSuffix) -MM ff/ffunicode.c
-	$(CC) $(SourceSwitch) "/Users/sergey/projloc/ucosR/ff/ffunicode.c" $(CFLAGS) $(ObjectSwitch)$(IntermediateDirectory)/ff_ffunicode.c$(ObjectSuffix) $(IncludePath)
-$(IntermediateDirectory)/ff_ffunicode.c$(PreprocessSuffix): ff/ffunicode.c
-	$(CC) $(CFLAGS) $(IncludePath) $(PreprocessOnlySwitch) $(OutputSwitch) $(IntermediateDirectory)/ff_ffunicode.c$(PreprocessSuffix) ff/ffunicode.c
-
 $(IntermediateDirectory)/sd_mmc_hpl_sdhc.c$(ObjectSuffix): sd_mmc/hpl_sdhc.c
 	@$(CC) $(CFLAGS) $(IncludePath) -MG -MP -MT$(IntermediateDirectory)/sd_mmc_hpl_sdhc.c$(ObjectSuffix) -MF$(IntermediateDirectory)/sd_mmc_hpl_sdhc.c$(DependSuffix) -MM sd_mmc/hpl_sdhc.c
 	$(CC) $(SourceSwitch) "/Users/sergey/projloc/ucosR/sd_mmc/hpl_sdhc.c" $(CFLAGS) $(ObjectSwitch)$(IntermediateDirectory)/sd_mmc_hpl_sdhc.c$(ObjectSuffix) $(IncludePath)
 $(IntermediateDirectory)/sd_mmc_hpl_sdhc.c$(PreprocessSuffix): sd_mmc/hpl_sdhc.c
 	$(CC) $(CFLAGS) $(IncludePath) $(PreprocessOnlySwitch) $(OutputSwitch) $(IntermediateDirectory)/sd_mmc_hpl_sdhc.c$(PreprocessSuffix) sd_mmc/hpl_sdhc.c
 
+$(IntermediateDirectory)/src_iface_sd.c$(ObjectSuffix): src/iface_sd.c
+	@$(CC) $(CFLAGS) $(IncludePath) -MG -MP -MT$(IntermediateDirectory)/src_iface_sd.c$(ObjectSuffix) -MF$(IntermediateDirectory)/src_iface_sd.c$(DependSuffix) -MM src/iface_sd.c
+	$(CC) $(SourceSwitch) "/Users/sergey/projloc/ucosR/src/iface_sd.c" $(CFLAGS) $(ObjectSwitch)$(IntermediateDirectory)/src_iface_sd.c$(ObjectSuffix) $(IncludePath)
+$(IntermediateDirectory)/src_iface_sd.c$(PreprocessSuffix): src/iface_sd.c
+	$(CC) $(CFLAGS) $(IncludePath) $(PreprocessOnlySwitch) $(OutputSwitch) $(IntermediateDirectory)/src_iface_sd.c$(PreprocessSuffix) src/iface_sd.c
+
 $(IntermediateDirectory)/src_startup.c$(ObjectSuffix): src/startup.c
 	@$(CC) $(CFLAGS) $(IncludePath) -MG -MP -MT$(IntermediateDirectory)/src_startup.c$(ObjectSuffix) -MF$(IntermediateDirectory)/src_startup.c$(DependSuffix) -MM src/startup.c
 	$(CC) $(SourceSwitch) "/Users/sergey/projloc/ucosR/src/startup.c" $(CFLAGS) $(ObjectSwitch)$(IntermediateDirectory)/src_startup.c$(ObjectSuffix) $(IncludePath)
 $(IntermediateDirectory)/src_startup.c$(PreprocessSuffix): src/startup.c
 	$(CC) $(CFLAGS) $(IncludePath) $(PreprocessOnlySwitch) $(OutputSwitch) $(IntermediateDirectory)/src_startup.c$(PreprocessSuffix) src/startup.c
-
-$(IntermediateDirectory)/rshell_colours.c$(ObjectSuffix): rshell/colours.c
-	@$(CC) $(CFLAGS) $(IncludePath) -MG -MP -MT$(IntermediateDirectory)/rshell_colours.c$(ObjectSuffix) -MF$(IntermediateDirectory)/rshell_colours.c$(DependSuffix) -MM rshell/colours.c
-	$(CC) $(SourceSwitch) "/Users/sergey/projloc/ucosR/rshell/colours.c" $(CFLAGS) $(ObjectSwitch)$(IntermediateDirectory)/rshell_colours.c$(ObjectSuffix) $(IncludePath)
-$(IntermediateDirectory)/rshell_colours.c$(PreprocessSuffix): rshell/colours.c
-	$(CC) $(CFLAGS) $(IncludePath) $(PreprocessOnlySwitch) $(OutputSwitch) $(IntermediateDirectory)/rshell_colours.c$(PreprocessSuffix) rshell/colours.c
-
-$(IntermediateDirectory)/src_ucosR.c$(ObjectSuffix): src/ucosR.c
-	@$(CC) $(CFLAGS) $(IncludePath) -MG -MP -MT$(IntermediateDirectory)/src_ucosR.c$(ObjectSuffix) -MF$(IntermediateDirectory)/src_ucosR.c$(DependSuffix) -MM src/ucosR.c
-	$(CC) $(SourceSwitch) "/Users/sergey/projloc/ucosR/src/ucosR.c" $(CFLAGS) $(ObjectSwitch)$(IntermediateDirectory)/src_ucosR.c$(ObjectSuffix) $(IncludePath)
-$(IntermediateDirectory)/src_ucosR.c$(PreprocessSuffix): src/ucosR.c
-	$(CC) $(CFLAGS) $(IncludePath) $(PreprocessOnlySwitch) $(OutputSwitch) $(IntermediateDirectory)/src_ucosR.c$(PreprocessSuffix) src/ucosR.c
 
 $(IntermediateDirectory)/ff_diskio.c$(ObjectSuffix): ff/diskio.c
 	@$(CC) $(CFLAGS) $(IncludePath) -MG -MP -MT$(IntermediateDirectory)/ff_diskio.c$(ObjectSuffix) -MF$(IntermediateDirectory)/ff_diskio.c$(DependSuffix) -MM ff/diskio.c

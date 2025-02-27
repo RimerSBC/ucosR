@@ -76,6 +76,7 @@ typedef enum
 #define CLOCK_USB_ENABLE        0
 #if CLOCK_USB_ENABLE
 #define CONF_GCLK_USB_SRC      GCLK_PCHCTRL_GEN_GCLK3
+#endif
 
 #define SERCOM_CLOCKS_CONFIG() {\
         REG_GCLK_PCHCTRL3 = CLK_12MHZ | GCLK_PCHCTRL_CHEN;} // All SERCOMs slow clock @ 12MHz
