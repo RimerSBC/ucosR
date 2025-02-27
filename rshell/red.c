@@ -468,7 +468,7 @@ bool red(char *fileName)
 
    if (!red_load(fileName))
    {
-      tsprintf(ed.name, "noname");
+      tsprintf(ed.name, *fileName ? fileName : "noname");
       if (!(text.str = vPortReAlloc(text.str, RED_MEM_BLOCK_SIZE)))
          return false;
       text.maxLen = RED_MEM_BLOCK_SIZE;

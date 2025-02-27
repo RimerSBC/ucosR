@@ -1,4 +1,4 @@
-loadfile release/ucosR.hex
+loadfile Release/ucosR.hex
 r
 g
 power on

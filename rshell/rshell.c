@@ -350,11 +350,10 @@ char *qstrchr(char *str, char srch)
    {
       if (*str == srch)
          return str;
-      if (*str == '"') // quted expression found
+      if (*str == '"') // quoted expression found
       {
          while (*str && (*++str != '"'))
             ; // find second quote
-         continue;
       }
       str++;
    }
@@ -369,11 +368,10 @@ char *qstrstr(char *str, char *srch)
       for (uint16_t i = 0; srch[i]; i++)
          if (*str == srch[i])
             return str;
-      if (*str == '"') // quted expression found
+      if (*str == '"') // quoted expression found
       {
          while (*str && (*++str != '"'))
             ; // find second quote
-         continue;
       }
       str++;
    }

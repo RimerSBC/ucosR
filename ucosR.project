@@ -43,6 +43,7 @@
     <File Name="sd_mmc/err_codes.h"/>
   </VirtualDirectory>
   <VirtualDirectory Name="bios">
+    <File Name="bios/resources.h"/>
     <File Name="bios/syscalls.c"/>
     <File Name="bios/icons.c"/>
     <File Name="bios/icons.h"/>

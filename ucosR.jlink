@@ -1,4 +1,4 @@
-loadfile debug/ucosR.hex
+loadfile Debug/ucosR.hex
 r
 g
 power on

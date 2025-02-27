@@ -37,10 +37,6 @@
 #define TERM_FG_COLOUR 0x10   // Darkgreen
 #define TERM_BG_COLOUR 0      // Black
 #define TERM_BLINK_PERIOD 300 // mSec
-#define _TERM_FONT_WIDTH 8     // pixels
-#define _TERM_FONT_HEIGHT 12   // pixels
-#define _TERM_COLUMNS (LCD_WIDTH / TERM_FONT_WIDTH)
-#define _TERM_LINES (LCD_HEIGHT / TERM_FONT_HEIGHT)
 
 #define glyphChar(CC) ((glyph_t){.gl.c = CC, .gl.fg = uTerm.fgColour, .gl.bg = uTerm.bgColour, .gl.attr = 0})
 #define glyphChCol(CC, FG, BG) ((glyph_t){.gl.c = CC, .gl.fg = FG, .gl.bg = BG, .gl.attr = 0})
