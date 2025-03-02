@@ -3,21 +3,21 @@
  * sergey@sesadesign.com
  * -----------------------------------------------------------------------------
  * Licensed under Creative Commons Attribution-NonCommercial-ShareAlike 4.0
- * International (CC BY-NC-SA 4.0). 
- * 
+ * International (CC BY-NC-SA 4.0).
+ *
  * You are free to:
  *  - Share: Copy and redistribute the material.
  *  - Adapt: Remix, transform, and build upon the material.
- * 
+ *
  * Under the following terms:
  *  - Attribution: Give appropriate credit and indicate changes.
  *  - NonCommercial: Do not use for commercial purposes.
  *  - ShareAlike: Distribute under the same license.
- * 
+ *
  * DISCLAIMER: This work is provided "as is" without any guarantees. The authors
  * aren’t responsible for any issues, damages, or claims that come up from using
  * it. Use at your own risk!
- * 
+ *
  * Full license: http://creativecommons.org/licenses/by-nc-sa/4.0/
  * ---------------------------------------------------------------------------*/
 /**
@@ -49,14 +49,20 @@
 #include <stdlib.h>
 #include <string.h>
 
-_cl_param_t cliParam;
-
 #define ACTIVE_IFACE 0
 #define BUILTIN_IFACE 1
 
 #define PATH_FILE_NAME ".path.list"
 
 #define PIPED_PARAM_AT_END 1
+
+
+#define VERSION         0
+#define SUBVERSION      71
+
+_cl_param_t cliParam;
+char *AppGreeting = NULL; // Application greeting string. Compiled date and time will be printed if set to NULL 
+const uint16_t ucosRVersion = VERSION*100+SUBVERSION;
 
 typedef struct
 {
@@ -72,7 +78,7 @@ static struct
    uint8_t active;
 } pipeBuff = {0}; // Pipe buffer size.
 
-void __attribute__((weak)) interface_registstration(void)
+void __attribute__((weak)) interface_register(void)
 {
    /// list of add_interface(&ifaceStruct)
    /// calls to add relevant interfaces to the shell
@@ -87,7 +93,7 @@ static cmd_err_t shell_cls(_cl_param_t *sParam);
 static cmd_err_t shell_rs(_cl_param_t *sParam);
 static cmd_err_t shell_red(_cl_param_t *sParam);
 
-#define RSHELL_DEBUG    1
+#define RSHELL_DEBUG 1
 #if RSHELL_DEBUG
 static cmd_err_t shell_param(_cl_param_t *sParam);
 static cmd_err_t shell_eefrmt(_cl_param_t *sParam);
@@ -562,11 +568,7 @@ uint8_t exec_line(char *str)
       }
       else if (token)
       {
-         tprintf("E: ");
-         if (execInterface && execInterface->deferr)
-            tprintf("%s\n", execInterface->deferr);
-         else
-            tprintf("Invalid command \"%s\"\n", token);
+         tprintf("E: Invalid command \"%s\"\n", token);
          stdio->putch = lastPutch;
          return false;
       }
@@ -586,7 +588,7 @@ void rshell_task(void *vParam)
 
    shell_version(NULL);
    add_interface(&ifaceUtil);
-   interface_registstration();
+   interface_register();
    draw_icon_rle(288, 0, _rgb(64, 64, 0), ANSI_pal256[sysConf.textBG], IconRsbc);
    tprintf("-- %d bytes free\n", xPortGetFreeHeapSize());
    tprintf("Init: ");
@@ -691,12 +693,15 @@ cmd_err_t shell_echo(_cl_param_t *sParam)
 
 cmd_err_t shell_path(_cl_param_t *sParam)
 {
+   const cmd_err_t ErrMmsg = "Invalid parameters:\n -a - to add\n -d - to delete";
    lfile_t *pathFile;
    _iface_list_t *path = (_iface_list_t *)ifacePath->next; // set to '/'
    bool saveFile = false;
    if (sParam->argc)
    {
-      switch (*sParam->argv[0])
+      if (*sParam->argv[0] != '-')
+         return ErrMmsg;
+      switch (sParam->argv[0][1])
       {
       case 'a':
          if (sParam->argc > 1)
@@ -730,7 +735,7 @@ cmd_err_t shell_path(_cl_param_t *sParam)
          tprintf("\n");
          break;
       default:
-         return "Invalid parameters:\n a - to add\n d - to delete";
+         return ErrMmsg;
       }
       if (saveFile)
       {
@@ -763,7 +768,7 @@ cmd_err_t shell_path(_cl_param_t *sParam)
    }
    else
    {
-      path = ifacePath;
+      path = ifacePath->next;
       while (1)
       {
          tprintf("%s\n", path->iface->name);
@@ -778,8 +783,11 @@ cmd_err_t shell_path(_cl_param_t *sParam)
 
 cmd_err_t shell_version(_cl_param_t *sParam)
 {
-   tprintf("Rimer shell v%d.%2d\n", VERSION, SUBVERSION);
-   tprintf("-- Compiled: %s %s\n", __DATE__, __TIME__);
+   tprintf("Rimer shell v%d.%2d\n", ucosRVersion / 100, ucosRVersion % 100);
+   if (AppGreeting)
+      tprintf("%s\n", AppGreeting);
+   else
+      tprintf("-- Compiled: %s %s\n", __DATE__, __TIME__);
    return CMD_NO_ERR;
 }
 
@@ -850,15 +858,15 @@ static cmd_err_t shell_enum(_cl_param_t *sParam)
    };
    if (!sParam->argc)
    {
-       char **ptr = (char **)list;
-       tprintf("Choose one these:\n");
-       while (*ptr)
-           tprintf("%s, ",*ptr++);
-       tprintf("\n");
-    return CMD_NO_ERR;
+      char **ptr = (char **)list;
+      tprintf("Choose one these:\n");
+      while (*ptr)
+         tprintf("%s, ", *ptr++);
+      tprintf("\n");
+      return CMD_NO_ERR;
    }
-   
-   tprintf("Index %d\n", tget_enum(sParam->argv[0],list));
+
+   tprintf("Index %d\n", tget_enum(sParam->argv[0], list));
    return CMD_NO_ERR;
 }
 

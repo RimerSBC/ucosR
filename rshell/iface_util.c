@@ -35,8 +35,8 @@
 #include "keyboard.h"
 #include "tstring.h"
 
-static char *utl_hex(_cl_param_t *sParam);
-static char *utl_delay(_cl_param_t *sParam);
+static cmd_err_t utl_hex(_cl_param_t *sParam);
+static cmd_err_t utl_delay(_cl_param_t *sParam);
 static bool iface_util_init(bool verbose);
 
 _iface_t ifaceUtil =
@@ -63,7 +63,7 @@ static bool iface_util_init(bool verbose)
    return true;
 }
 
-char *utl_hex(_cl_param_t *sParam)
+cmd_err_t utl_hex(_cl_param_t *sParam)
 {
    for (uint8_t i = 0; i < sParam->argc; i++)
    {
@@ -73,7 +73,7 @@ char *utl_hex(_cl_param_t *sParam)
    return CMD_NO_ERR;
 }
 
-char *utl_delay(_cl_param_t *sParam)
+cmd_err_t utl_delay(_cl_param_t *sParam)
 {
    uint16_t delay;
    if (!sParam->argc)

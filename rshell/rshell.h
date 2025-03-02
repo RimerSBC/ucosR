@@ -52,7 +52,6 @@ typedef struct
 {
     const char *name;   // interface name
     const char *prompt; // interface prompt. 
-    const char *deferr; // Default error prompt. Set to NULL to use system's one
     const char *desc;   // Short interface description
     bool (*init)(bool); // Interface initilaization function
     const _cmd_t cmdList[];
@@ -63,7 +62,11 @@ void rshell_task(void *vParam);
 uint8_t exec_line(char *str);
 bool dump8(uint16_t addr, uint8_t *data,uint8_t size,uint8_t *lineNum);
 
-/** override weak interface_registstration() with a function consisting list of additional add_interface() calls */
-void interface_registstration(void);
+/// Application greeting string. Compiled date and time will be printed if set to NULL
+extern char *AppGreeting;
+/// ucosR version calculated as VERSION * 100 + SUBVERSION
+extern const uint16_t ucosRVersion; 
+/// override weak interface_register() with a function consisting list of additional add_interface() calls 
+void interface_register(void);
 
 #endif //_RSHELL_INCLUDED
