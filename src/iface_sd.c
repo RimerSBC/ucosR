@@ -53,20 +53,21 @@ static cmd_err_t cmd_fat_pwd(_cl_param_t *sParam);
 static cmd_err_t cmd_fat_rm(_cl_param_t *sParam);
 static cmd_err_t cmd_fat_cat(_cl_param_t *sParam);
 
-    const _iface_t ifaceSD = {.name = "sd",
-                              .prompt = NULL,
-                              .desc = "sd card FAT control",
-                              .init = iface_sd_init,
-                              .cmdList = {
-                                  {.name = "sdi", .desc = "sd card info", .func = cmd_fat_sdi},
-                                  {.name = "sdrd", .desc = "sd card read : block count", .func = cmd_fat_block_read},
-                                  {.name = "ls", .desc = "directory list", .func = cmd_fat_ls},
-                                  {.name = "cd", .desc = "change directory", .func = cmd_fat_cd},
-                                  {.name = "pwd", .desc = "get working directory", .func = cmd_fat_pwd},
-                                  {.name = "rm", .desc = "remove file(s)", .func = cmd_fat_rm},
-                                  {.name = "cat", .desc = "displays file contents", .func = cmd_fat_cat},
-                                  {.name = NULL, .func = NULL},
-                              } };
+const _iface_t ifaceSD = {
+    .name = "sd",
+    .prompt = NULL,
+    .desc = "sd card FAT control",
+    .init = iface_sd_init,
+    .cmdList = {
+        {.name = "sdi", .desc = "sd card info", .func = cmd_fat_sdi},
+        {.name = "sdrd", .desc = "sd card read : block count", .func = cmd_fat_block_read},
+        {.name = "ls", .desc = "directory list", .func = cmd_fat_ls},
+        {.name = "cd", .desc = "change directory", .func = cmd_fat_cd},
+        {.name = "pwd", .desc = "get working directory", .func = cmd_fat_pwd},
+        {.name = "rm", .desc = "remove file(s)", .func = cmd_fat_rm},
+        {.name = "cat", .desc = "displays file contents", .func = cmd_fat_cat},
+        {.name = NULL, .func = NULL},
+    }};
 
 static bool iface_sd_init(bool verbose)
 {
