@@ -79,20 +79,21 @@ void clocks_init(void)
       __asm("nop");
 }
 
-/// forward declarations
-uint8_t conf_checksum(_sysconf_t *conf)
+uint8_t crc8(uint8_t *data, uint16_t len)
 {
-   uint8_t checksum = 0x5a;
-   for (uint8_t i = 0; i < sizeof(_sysconf_t) - 1; i++)
-      checksum += ((uint8_t *)conf)[i];
-   return checksum;
+   uint8_t crc = 0;
+   while (len--)
+   {
+      crc ^= *data++;
+      for (uint8_t i = 0; i < 8; i++)
+         crc = crc & 1 ? (crc >> 1) ^ 0x8C : crc >> 1;
+   }
+   return crc;
 }
 
 void power_init(void)
 {
    PWR_PORT.DIRSET.reg = PWR_PIN_VDDn; // PWR_PIN_VIO | PWR_PIN_VDDn | PWR_PIN_VSEL;
-   // PWR_PORT.OUTCLR.reg = PWR_PIN_VIO; // disable VIO on start.
-   // PWR_PORT.OUTCLR.reg = PWR_PIN_VSEL; // Set voltage to 3.3V.
    PWR_PORT.OUTCLR.reg = PWR_PIN_VDDn; // Enable VDD
 }
 
@@ -100,7 +101,7 @@ void bsp_init(void)
 {
    clocks_init();
    SCB->CPACR |= ((3UL << 10 * 2) | (3UL << 11 * 2)); // FPU access mode: set CP10 and CP11 Full Access
-   sysConf.checkSum = conf_checksum(&sysConf);
+   sysConf.checkSum = crc8((uint8_t *)&sysConf,sizeof(sysConf)-1);
    dma_init();
    rnd_init();
    power_init();

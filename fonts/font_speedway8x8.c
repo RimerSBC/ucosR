@@ -231,4 +231,5 @@ const uFont_t speedway8x8 =
         .height = 8,
         .first = 32,
         .last = 127,
+        .name = "Speed Way",
 };

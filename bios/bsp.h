@@ -122,7 +122,7 @@ typedef struct
     uint8_t kbdsnd;     // Key's clicking sound
     char    iface[IFACE_NAME_LEN+1];        // Last used interface name
     char    startup[CONFIG_STARTUP_LEN+1];  // Startup command line
-    uint8_t checkSum;   // config structure checksum
+    uint8_t checkSum;   // config structure checksum (crc8)
 }_sysconf_t;
 
 typedef struct __attribute__((packed))
@@ -145,7 +145,7 @@ typedef struct __attribute__((packed))
 #define rnd(range) (TRNG->DATA.reg % range)
 
 void bsp_init(void);
-uint8_t conf_checksum(_sysconf_t *conf);
+uint8_t crc8(uint8_t *data, uint16_t len);
 
 extern bool usbConnected;
 extern _sysconf_t sysConf;

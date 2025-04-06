@@ -32,6 +32,7 @@
 #define CMD_ERR_EMPTY       ""
 #define CMD_MISSING_PARAM   "Missing parameter!"
 #define CMD_MISSING_VALUE   "Missing value!"
+#define CMD_UNKNOWN_OPTION  "Unknown option!"
 
 typedef char* cmd_err_t;
 
@@ -59,7 +60,7 @@ typedef struct
 
 bool add_interface(const _iface_t *iface);
 void rshell_task(void *vParam);
-uint8_t exec_line(char *str);
+bool exec_line(char *str);
 bool dump8(uint16_t addr, uint8_t *data,uint8_t size,uint8_t *lineNum);
 
 /// Application greeting string. Compiled date and time will be printed if set to NULL

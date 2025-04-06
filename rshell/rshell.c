@@ -49,6 +49,9 @@
 #include <stdlib.h>
 #include <string.h>
 
+#define RSHELL_VERSION 0
+#define RSHELL_SUBVERSION 72
+
 #define ACTIVE_IFACE 0
 #define BUILTIN_IFACE 1
 
@@ -56,13 +59,9 @@
 
 #define PIPED_PARAM_AT_END 1
 
-
-#define VERSION         0
-#define SUBVERSION      71
-
 _cl_param_t cliParam;
-char *AppGreeting = NULL; // Application greeting string. Compiled date and time will be printed if set to NULL 
-const uint16_t ucosRVersion = VERSION*100+SUBVERSION;
+char *AppGreeting = NULL; // Application greeting string. Compiled date and time will be printed if set to NULL
+const uint16_t ucosRVersion = RSHELL_VERSION * 100 + RSHELL_SUBVERSION;
 
 typedef struct
 {
@@ -453,7 +452,7 @@ void _pbuff_putc(char c)
    pipeBuff.str[pipeBuff.active][pipeBuff.ptr] = '\0';
 }
 /** Command line execute with pipe support */
-uint8_t exec_line(char *str)
+bool exec_line(char *str)
 {
    enum
    {
@@ -560,7 +559,12 @@ uint8_t exec_line(char *str)
       {
          if ((error = execInterface->cmdList[funcIndx].func(par_param(strtok(NULL, "\n\r")))))
          {
-            tprintf("E: %s\n", error);
+            stdio->putch = lastPutch;
+            if (*error)
+               tprintf("E: %s\n", error);
+            else // Check if error message is in the pipe buffer
+               if (*pipeBuff.str[pipeBuff.active])
+                  tprintf("%s%s", pipeBuff.str[pipeBuff.active][1] == ':' ? "" : "E: ", pipeBuff.str[pipeBuff.active]);
             return false;
          }
          if (state != PIPED)
@@ -568,8 +572,8 @@ uint8_t exec_line(char *str)
       }
       else if (token)
       {
-         tprintf("E: Invalid command \"%s\"\n", token);
          stdio->putch = lastPutch;
+         tprintf("E: Invalid command \"%s\"\n", token);
          return false;
       }
    } while (state != DONE);
@@ -650,13 +654,15 @@ void rshell_task(void *vParam)
       while (*str == ' ')
          str++;        // remove leading spaces
       if (*str == '@') // looped command line
+      {
          while (!keyboard_break())
          {
             strcpy(clBuff, str + 1);
-            // tprintf("\r");
             if (!exec_line(clBuff))
                break;
          }
+       stdio->putch('\n'); 
+      }
       else if (*str != '#')
          exec_line(str); // skip commented lines
 
@@ -683,11 +689,56 @@ cmd_err_t shell_help(_cl_param_t *sParam)
 
 cmd_err_t shell_echo(_cl_param_t *sParam)
 {
-   for (uint8_t i = 0; i < sParam->argc; i++)
+   enum
    {
-      tprintf("%s ", sParam->argv[i]);
+      NORMAL,       // printed, new line
+      END_OF_LINE,  // print, stay at the end of the line
+      HOME_OF_LINE, // print, stay at the beginning of the line
+      CLEAR_LINE,   // clear, print, new line
+      UPDATE_LINE,  // clear, print, stay at the same line
+   } lineFormat = NORMAL;
+   uint8_t parPtr = 0;
+   if (!sParam->argc)
+      return CMD_NO_ERR;
+
+   if (*sParam->argv[0] == '-')
+   {
+      parPtr++;
+      switch (sParam->argv[0][1])
+      {
+      case 'e':
+         lineFormat = END_OF_LINE;
+         break;
+      case 'h':
+         lineFormat = HOME_OF_LINE;
+         break;
+      case 'c':
+         lineFormat = CLEAR_LINE;
+         break;
+      case 'u':
+         lineFormat = UPDATE_LINE;
+         break;
+      }
    }
-   tprintf("\n");
+   if (lineFormat == CLEAR_LINE || lineFormat == UPDATE_LINE)
+      tprintf("\e[1K\r");
+   for (; parPtr < sParam->argc; parPtr++)
+   {
+      tprintf("%s ", sParam->argv[parPtr]);
+   }
+   switch (lineFormat)
+   {
+   case END_OF_LINE:
+   case UPDATE_LINE:
+      break;
+   case HOME_OF_LINE:
+      tprintf("\r");
+      break;
+   case CLEAR_LINE:
+   case NORMAL:
+      tprintf("\n");
+      break;
+   }
    return CMD_NO_ERR;
 }
 

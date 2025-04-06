@@ -44,6 +44,7 @@ typedef struct
   uint8_t width;
   uint8_t first;
   uint8_t last;
+  const char *name;
 }uFont_t;
 
 extern const uFont_t rimer8x12;

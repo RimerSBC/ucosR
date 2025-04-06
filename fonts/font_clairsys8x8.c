@@ -890,5 +890,6 @@ const uFont_t clairsys8x8 =
     .width = 8,
     .height = 8,
     .first = 32,
-    .last = 126
+    .last = 126,
+    .name = "Clairsys",
 };

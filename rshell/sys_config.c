@@ -46,7 +46,7 @@ void conf_load(void)
     if ((confFile=lf_open(DEF_CONF_FILE_NAME,MODE_READ)) != NULL)
     {
         lf_read(confFile,&tmpConf,sizeof(tmpConf));
-        if (conf_checksum(&tmpConf) != tmpConf.checkSum)
+        if (crc8((uint8_t *)&tmpConf,sizeof(tmpConf)-1) != tmpConf.checkSum)
             lf_write(confFile,&sysConf,sizeof(tmpConf));
         else
             memcpy((uint8_t *)&sysConf,(uint8_t *)&tmpConf,sizeof(_sysconf_t));
@@ -67,7 +67,7 @@ void conf_load(void)
 void conf_save(void)
 {
     lfile_t *confFile;
-    sysConf.checkSum = conf_checksum(&sysConf);
+    sysConf.checkSum = crc8((uint8_t *)&sysConf,sizeof(sysConf)-1);
     if ((confFile = lf_open(DEF_CONF_FILE_NAME,MODE_WRITE)))
     {
         if (lf_write(confFile,(uint8_t *)&sysConf,sizeof(sysConf)))
