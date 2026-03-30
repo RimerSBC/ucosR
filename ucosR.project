@@ -1,5 +1,36 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <CodeLite_Project Name="ucosR" Version="11000" InternalType="Console">
+  <VirtualDirectory Name="tusb">
+    <File Name="tusb/tusb_samd51.c"/>
+    <File Name="tusb/tusb.h"/>
+    <File Name="tusb/tusb.c"/>
+    <File Name="tusb/tusb_option.h"/>
+    <File Name="tusb/usbd.c"/>
+    <File Name="tusb/tusb_config.h"/>
+    <File Name="tusb/cdc_device.c"/>
+    <File Name="tusb/dcd_samd.c"/>
+    <File Name="tusb/tusb_types.h"/>
+    <File Name="tusb/tusb_compiler.h"/>
+    <File Name="tusb/msc_device.c"/>
+    <File Name="tusb/dcd.h"/>
+    <File Name="tusb/usbd_pvt.h"/>
+    <File Name="tusb/tusb_debug.h"/>
+    <File Name="tusb/tusb_fifo.h"/>
+    <File Name="tusb/msc.h"/>
+    <File Name="tusb/usbd_control.c"/>
+    <File Name="tusb/tusb_private.h"/>
+    <File Name="tusb/tusb_common.h"/>
+    <File Name="tusb/usbd.h"/>
+    <File Name="tusb/msc_disk.c"/>
+    <File Name="tusb/cdc_device.h"/>
+    <File Name="tusb/tusb_mcu.h"/>
+    <File Name="tusb/msc_device.h"/>
+    <File Name="tusb/usb_descriptors.c"/>
+    <File Name="tusb/tusb_verify.h"/>
+    <File Name="tusb/cdc.h"/>
+    <File Name="tusb/tusb_fifo.c"/>
+    <File Name="tusb/cdc_rndis.h"/>
+  </VirtualDirectory>
   <VirtualDirectory Name="fonts">
     <File Name="fonts/fonts.h"/>
     <File Name="fonts/font_rimer8x12.c"/>
@@ -243,7 +274,7 @@
   <Dependencies Name="Release"/>
   <Settings Type="Executable">
     <GlobalSettings>
-      <Compiler Options="" C_Options="-mthumb -ffunction-sections -fdata-sections -mcpu=cortex-m4 -std=gnu99 -mfloat-abi=hard -mfpu=fpv4-sp-d16" Assembler="">
+      <Compiler Options="" C_Options="-mthumb -ffunction-sections -fdata-sections -mcpu=cortex-m4 -std=gnu17 -mfloat-abi=hard -mfpu=fpv4-sp-d16" Assembler="">
         <IncludePath Value="."/>
         <IncludePath Value="bios"/>
         <IncludePath Value="bios/cmsis"/>
@@ -254,6 +285,7 @@
         <IncludePath Value="ff"/>
         <IncludePath Value="sd_mmc"/>
         <IncludePath Value="fonts"/>
+        <IncludePath Value="tusb"/>
       </Compiler>
       <Linker Options="-mthumb -Wl,-Map=$(ProjectName).map --specs=nosys.specs -Wl,--gc-sections -mcpu=cortex-m4 -mfloat-abi=hard -mfpu=fpv4-sp-d16">
         <LibraryPath Value="."/>

@@ -31,6 +31,7 @@
 #define CMD_NO_ERR          NULL
 #define CMD_ERR_EMPTY       ""
 #define CMD_MISSING_PARAM   "Missing parameter!"
+#define CMD_TOOMANY_PARAM   "Too many params!"
 #define CMD_MISSING_VALUE   "Missing value!"
 #define CMD_UNKNOWN_OPTION  "Unknown option!"
 

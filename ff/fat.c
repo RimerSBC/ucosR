@@ -29,6 +29,7 @@
  */
 #include "FreeRTOS.h"
 #include "task.h"
+#include "semphr.h"
 #include "bsp.h"
 #include "tstring.h"
 #include "conf_sd_mmc.h"
@@ -38,6 +39,8 @@
 #include "ff.h"
 
 bool FATReady = false;
+bool extWrite = false; 
+SemaphoreHandle_t xSDBusy = NULL;
 
 struct mci_sync_desc sdcard_io_bus;
 /* Card Detect (CD) pin settings */
@@ -104,10 +107,12 @@ bool sd_info_print(uint8_t slot)
 void fat_task(void* vParam )
 {
     bool sdCsPin,lastSdCsPin;
+    uint8_t updateCountDown = 0;
     sd_mmc_err_t result;
     FATFS *fs;     /* Ponter to the filesystem object */
     fs = pvPortMalloc(sizeof (FATFS));           /* Get work area for the volume */
     sd_port_init();
+    xSDBusy = xSemaphoreCreateMutex();
     sdCsPin = (SD_PORT_CTRLA.IN.reg & SD_PIN_CD) ? true : false;
     lastSdCsPin = !sdCsPin; // force first card status check
     while(1)
@@ -129,6 +134,19 @@ void fat_task(void* vParam )
             else
             {
                 f_unmount("");
+            }
+        }
+        if (extWrite)
+        {
+            extWrite = false;
+            updateCountDown = 20;
+        }
+        if(updateCountDown)
+        {
+            if(!--updateCountDown) // update fat after an external write (TinyUSB)
+            {
+                f_unmount("");
+                FATReady = (f_mount(fs, "", 1) == FR_OK) ? true : false;
             }
         }
         vTaskDelay(100);

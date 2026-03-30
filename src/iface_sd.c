@@ -44,6 +44,21 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "board_api.h"
+#include "tusb.h"
+
+typedef enum
+{
+   TUSB_NOT_MOUNTED,
+   TUSB_MOUNTED,
+   TUSB_SUSPENDED,
+} tusb_stat_e;
+
+tusb_stat_e tusbStat;
+
+static void usb_device_task(void *param);
+void cdc_task(void *params);
+
 static bool iface_sd_init(bool verbose);
 static cmd_err_t cmd_fat_sdi(_cl_param_t *sParam);
 static cmd_err_t cmd_fat_block_read(_cl_param_t *sParam);
@@ -82,6 +97,12 @@ static bool iface_sd_init(bool verbose)
       vTaskDelay(10); // Wait for FAT is ready with 200 ms timeout.
    }
    initialized = FATReady;
+   
+  void tusb_board_init(void);
+  tusb_board_init(); 
+  xTaskCreate(usb_device_task, "usbd", configMINIMAL_STACK_SIZE, NULL, configMAX_PRIORITIES - 1, NULL);
+  xTaskCreate(cdc_task, "cdc", configMINIMAL_STACK_SIZE, NULL, configMAX_PRIORITIES - 2, NULL);
+   
    if (verbose)
       tprintf("Interface \"sd\" initialized.\n");
    return initialized;
@@ -278,4 +299,125 @@ static cmd_err_t cmd_fat_cat(_cl_param_t *sParam)
    }
    f_close(&catFile);
    return CMD_NO_ERR;
+}
+
+/// Tiny USB section
+
+// USB Device Driver task
+// This top level thread process all usb events and invoke callbacks
+static void usb_device_task(void *param)
+{
+   (void)param;
+
+   // init device stack on configured roothub port
+   // This should be called after scheduler/kernel is started.
+   // Otherwise it could cause kernel issue since USB IRQ handler does use RTOS queue API.
+   tusb_rhport_init_t dev_init = {
+       .role = TUSB_ROLE_DEVICE,
+       .speed = TUSB_SPEED_AUTO};
+   tusb_init(BOARD_TUD_RHPORT, &dev_init);
+   
+   if (board_init_after_tusb)
+   {
+      board_init_after_tusb();
+   }
+
+   // RTOS forever loop
+   while (1)
+   {
+      // put this thread to waiting state until there is new events
+      tud_task();
+
+      // following code only run if tud_task() process at least 1 event
+      tud_cdc_write_flush();
+      
+      taskYIELD();
+   }
+}
+
+//--------------------------------------------------------------------+
+// Device callbacks
+//--------------------------------------------------------------------+
+
+// Invoked when device is mounted
+void tud_mount_cb(void)
+{
+   tusbStat = TUSB_MOUNTED;
+}
+
+// Invoked when device is unmounted
+void tud_umount_cb(void)
+{
+   tusbStat = TUSB_NOT_MOUNTED;
+}
+
+// Invoked when usb bus is suspended
+// remote_wakeup_en : if host allow us  to perform remote wakeup
+// Within 7ms, device must draw an average of current less than 2.5 mA from bus
+void tud_suspend_cb(bool remote_wakeup_en)
+{
+   (void)remote_wakeup_en;
+   tusbStat = TUSB_SUSPENDED;
+}
+
+// Invoked when usb bus is resumed
+void tud_resume_cb(void)
+{
+   tusbStat = tud_mounted() ? TUSB_MOUNTED : TUSB_NOT_MOUNTED;
+}
+
+//--------------------------------------------------------------------+
+// USB CDC
+//--------------------------------------------------------------------+
+void cdc_task(void *params)
+{
+   while (1)
+   {
+      // connected() check for DTR bit
+      // Most but not all terminal client set this when making connection
+      // if ( tud_cdc_connected() )
+      {
+         // There are data available
+         while (tud_cdc_available())
+         {
+            uint8_t buf[64];
+
+            // read and echo back
+            uint32_t count = tud_cdc_read(buf, sizeof(buf));
+            (void)count;
+
+            // Echo back
+            // Note: Skip echo by commenting out write() and write_flush()
+            // for throughput test e.g
+            //    $ dd if=/dev/zero of=/dev/ttyACM0 count=10000
+            tud_cdc_write(buf, count);
+         }
+
+         tud_cdc_write_flush();
+      }
+      vTaskDelay(1);
+   }
+}
+
+// Invoked when cdc when line state changed e.g connected/disconnected
+void tud_cdc_line_state_cb(uint8_t itf, bool dtr, bool rts)
+{
+   (void)itf;
+   (void)rts;
+
+   // TODO set some indicator
+   if (dtr)
+   {
+      // Terminal connected
+   }
+   else
+   {
+      // Terminal disconnected
+   }
+}
+
+// Invoked when CDC interface received data from host
+void tud_cdc_rx_cb(uint8_t itf)
+{
+   (void)itf;
 }

@@ -41,6 +41,7 @@
 void fat_task(void* vParam );
 bool sd_info_print(uint8_t slot);
 extern bool FATReady;
+extern bool extWrite; 
 extern uint8_t sd_mmc_block[SD_MMC_BLOCK_SIZE];
 
 #endif //_CMD_FAT_CTRL_INCLUDED

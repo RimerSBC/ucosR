@@ -111,6 +111,10 @@
 #define I2C_PIN_SCL         PORT_PA23
 #define I2C_SERCOM_FREQ     60000000.0
 
+
+#define USB_PORT            PORT->Group[0] // PortA
+#define USB_PIN_DM          PORT_PA24
+#define USB_PIN_DP          PORT_PA25
        
 /// TC mapping
 
