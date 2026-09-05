@@ -278,6 +278,7 @@ static void _print_help(const _iface_t *iface)
 bool dump8(uint16_t addr, uint8_t *data, uint8_t size, uint8_t *lineNum)
 {
    char askiiStr[9];
+   if (!size) return false;
    uint8_t i;
    if (++*lineNum == 19)
    {
@@ -604,18 +605,20 @@ void rshell_task(void *vParam)
       i++;
    }
    tprintf(" [%d]\n", i);
-   /// Path manegement
+   /// Path management
    init_iface_path(get_interface(sysConf.iface));
    if ((pathFile = lf_open(PATH_FILE_NAME, MODE_READ)))
    {
       uint16_t fSize = lf_get_fsize("", pathFile->pos >> 8); // lf_get_fsize(PATH_FILE_NAME,0);
-      str = pvPortMalloc(fSize + 1);
-      lf_read(pathFile, str, fSize);
-      str[fSize] = '\0';
-      tprintf("Path: %s\n", str);
-      lf_close(pathFile);
-      iface_path_add(str);
-      vPortFree(str);
+      if((str = pvPortMalloc(fSize + 1)) != NULL)
+      {
+          lf_read(pathFile, str, fSize);
+          str[fSize] = '\0';
+          tprintf("Path: %s\n", str);
+          lf_close(pathFile);
+          iface_path_add(str);
+          vPortFree(str);
+      }
    }
    tstrncpy(clBuff, sysConf.startup, sizeof(clBuff));
    str = clBuff;
@@ -803,9 +806,11 @@ cmd_err_t shell_path(_cl_param_t *sParam)
             while (path->next)
             {
                path = path->next;
-               strncat(pathListBuff, path->iface->name, 255);
-               if (path->next)
-                  strncat(pathListBuff, ",", 255);
+               uint16_t current_len = (uint16_t)strlen(pathListBuff);
+               if(current_len > 254) break;
+                tsnprintf(pathListBuff + current_len, 256 - current_len, "%s", path->iface->name);
+               if (path->next && (strlen(pathListBuff) < 254))
+                  strcat(pathListBuff, ",");
             }
             pLen = strlen(pathListBuff);
             if (pLen)

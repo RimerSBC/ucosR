@@ -239,18 +239,15 @@ int tsprintf(char *dst, const char *str, ...)
 int tsnprintf(char *dst, uint16_t size, const char *str, ...)
 {
    va_list arg;
-   va_start(arg, str);
    if (!size)
       return 0;
-   buffSize = size;
+   va_start(arg, str);
+   buffSize = size-1;
    buffPtr = dst;
    tformat(&bufStream, str, &arg);
-   if (!buffSize)
-      dst[size - 1] = '\0';
-   else
-      buff_putch('\0');
-   return size - buffSize;
+   buff_putch('\0');
    va_end(arg);
+   return (size-1) - buffSize;
 }
 
 void tstrncpy(char *dst, char *src, uint16_t size)

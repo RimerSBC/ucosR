@@ -28,7 +28,8 @@
  * @brief LLFS
  *
  * Linked List File System Module.
- *
+ * No multitasking supported 
+ * 
  * @see llfs_conf.h and llfs_drv_conf.h for details.
  */
 #include "llfs.h"
@@ -67,7 +68,7 @@ lf_err_t lf_format(uint32_t size, uint16_t devID, char* name)
    if(volumeEEPROM->write_sector(volumeEEPROM->sData, 0))
       for(sPtr = 1; sPtr < volumeEEPROM->phy->secCount - (volumeEEPROM->phy->secCount == 0xff) ? 1 : 0; sPtr++)
       {
-         if(!(volumeEEPROM->set_sector_next(&emptyNext, sPtr))) break;
+         if(!(volumeEEPROM->set_sector_next(&emptyNext, sPtr))) return lf_error = LF_ERR_VOLUME;
       }
    return lf_error = LF_ERR_NONE;
 }
@@ -158,7 +159,7 @@ uint16_t lf_add_record(lf_record_t* newRecord, char* name, uint8_t attr)
       else // create new index sector
       {
          // if the volume has the maximum sectors (64KB) then check last sector for availability
-         if(volumeEEPROM->get_sector_next(&next, LLFS_MAX_SECTOR_COUNT - 1)) return 0;
+         if(!volumeEEPROM->get_sector_next(&next, LLFS_MAX_SECTOR_COUNT - 1)) return 0;
          if((volumeEEPROM->phy->secCount == LLFS_MAX_SECTOR_COUNT) && (!next))
          {
             if(lf_error) return 0;
@@ -282,7 +283,7 @@ void lf_clean_data(uint8_t fPtr)
    while(((next & 0xff00) != 0xff00) && ((next >> 8) != fPtr))
    {
       fPtr = next >> 8;
-      if(!volumeEEPROM->get_sector_next(&next, fPtr)) return;
+      if(!volumeEEPROM->get_sector_next(&next, fPtr) || (next == 0)) return;
       volumeEEPROM->set_sector_next(&emptyNext, fPtr);
       if(lf_error) return;
    }
@@ -361,13 +362,14 @@ lfile_t* lf_open(char* name, uint8_t mode)
    lfile_t* tmpFile;
    uint8_t tmpVol = 0;
    lf_record_t record;
-
+    
    lf_error = LF_ERR_MEM;
-   if(!*name || !name)
+   if(!name || !*name)
    {
       lf_error = LF_ERR_FNAME;
       return NULL;
    }
+   if (strlen(name) > LLFS_FILENAME_LEN) name[LLFS_FILENAME_LEN] = '\0';
    if((tmpFile = pvPortMalloc(sizeof(lfile_t))) != NULL)
    {
       if((tmpFile->sData = pvPortMalloc(LLFS_SECTOR_SIZE)) == NULL)
@@ -391,7 +393,8 @@ lfile_t* lf_open(char* name, uint8_t mode)
       }
       tmpFile->volume = tmpVol;
       tmpFile->mode = mode;
-      strcpy(tmpFile->name, name);
+      memset(tmpFile->name,0,LLFS_FILENAME_LEN);
+      strncpy(tmpFile->name, name, LLFS_FILENAME_LEN);  
       tmpFile->changed = 0;
       tmpFile->dataSect = 0;
       tmpFile->pos = ((uint16_t)record.fptr) << 8;

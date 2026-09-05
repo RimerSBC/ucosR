@@ -14,7 +14,7 @@ CurrentFileName        :=
 CurrentFilePath        :=
 CurrentFileFullPath    :=
 User                   :=sergey
-Date                   :=29/03/2026
+Date                   :=25/07/2026
 CodeLitePath           :=/Users/sergey/.codelite
 LinkerName             :=/Applications/arm/bin/arm-none-eabi-gcc
 SharedObjectLinkerName :=/Applications/arm/bin/arm-none-eabi-g++ -shared -fPIC
@@ -63,14 +63,14 @@ AS       := /Applications/arm/bin/arm-none-eabi-as
 CodeLiteDir:=/Applications/codelite.app/Contents/SharedSupport/
 shell:=zsh
 Objects0=$(IntermediateDirectory)/bios_dmactrl.c$(ObjectSuffix) $(IntermediateDirectory)/bios_tstring.c$(ObjectSuffix) $(IntermediateDirectory)/tusb_usbd_control.c$(ObjectSuffix) $(IntermediateDirectory)/kernel_tasks.c$(ObjectSuffix) $(IntermediateDirectory)/tusb_usb_descriptors.c$(ObjectSuffix) $(IntermediateDirectory)/fonts_font_zx8x8.c$(ObjectSuffix) $(IntermediateDirectory)/kernel_port.c$(ObjectSuffix) $(IntermediateDirectory)/kernel_list.c$(ObjectSuffix) $(IntermediateDirectory)/kernel_stream_buffer.c$(ObjectSuffix) $(IntermediateDirectory)/kernel_event_groups.c$(ObjectSuffix) \
-	$(IntermediateDirectory)/kernel_croutine.c$(ObjectSuffix) 
+	
 
-Objects1=$(IntermediateDirectory)/fonts_font_speedway8x8.c$(ObjectSuffix) $(IntermediateDirectory)/llfs_llfs_vol_eeprom.c$(ObjectSuffix) $(IntermediateDirectory)/llfs_llfs.c$(ObjectSuffix) $(IntermediateDirectory)/sd_mmc_hal_mci_sync.c$(ObjectSuffix) $(IntermediateDirectory)/rshell_uterm.c$(ObjectSuffix) $(IntermediateDirectory)/bios_i2c_port.c$(ObjectSuffix) $(IntermediateDirectory)/rshell_editline.c$(ObjectSuffix) $(IntermediateDirectory)/rshell_iface_sys.c$(ObjectSuffix) $(IntermediateDirectory)/tusb_msc_disk.c$(ObjectSuffix) \
+Objects1=$(IntermediateDirectory)/kernel_croutine.c$(ObjectSuffix) $(IntermediateDirectory)/fonts_font_speedway8x8.c$(ObjectSuffix) $(IntermediateDirectory)/llfs_llfs_vol_eeprom.c$(ObjectSuffix) $(IntermediateDirectory)/llfs_llfs.c$(ObjectSuffix) $(IntermediateDirectory)/sd_mmc_hal_mci_sync.c$(ObjectSuffix) $(IntermediateDirectory)/rshell_uterm.c$(ObjectSuffix) $(IntermediateDirectory)/bios_i2c_port.c$(ObjectSuffix) $(IntermediateDirectory)/rshell_editline.c$(ObjectSuffix) $(IntermediateDirectory)/rshell_iface_sys.c$(ObjectSuffix) $(IntermediateDirectory)/tusb_msc_disk.c$(ObjectSuffix) \
 	$(IntermediateDirectory)/rshell_iface_util.c$(ObjectSuffix) $(IntermediateDirectory)/rshell_sys_config.c$(ObjectSuffix) $(IntermediateDirectory)/tusb_cdc_device.c$(ObjectSuffix) $(IntermediateDirectory)/bios_bsp.c$(ObjectSuffix) $(IntermediateDirectory)/bios_sys_sercom.c$(ObjectSuffix) $(IntermediateDirectory)/rshell_commandline.c$(ObjectSuffix) $(IntermediateDirectory)/rshell_rshell.c$(ObjectSuffix) $(IntermediateDirectory)/bios_lcd.c$(ObjectSuffix) $(IntermediateDirectory)/bios_syscalls.c$(ObjectSuffix) $(IntermediateDirectory)/sd_mmc_hpl_sdhc.c$(ObjectSuffix) \
 	$(IntermediateDirectory)/tusb_usbd.c$(ObjectSuffix) $(IntermediateDirectory)/src_ucosR.c$(ObjectSuffix) $(IntermediateDirectory)/bios_icons.c$(ObjectSuffix) $(IntermediateDirectory)/ff_ffsystem.c$(ObjectSuffix) $(IntermediateDirectory)/kernel_queue.c$(ObjectSuffix) $(IntermediateDirectory)/tusb_tusb.c$(ObjectSuffix) $(IntermediateDirectory)/ff_ffunicode.c$(ObjectSuffix) $(IntermediateDirectory)/ff_fat.c$(ObjectSuffix) $(IntermediateDirectory)/kernel_timers.c$(ObjectSuffix) $(IntermediateDirectory)/src_main.c$(ObjectSuffix) \
-	$(IntermediateDirectory)/src_iface_sd.c$(ObjectSuffix) $(IntermediateDirectory)/src_startup.c$(ObjectSuffix) $(IntermediateDirectory)/rshell_colours.c$(ObjectSuffix) $(IntermediateDirectory)/rshell_red.c$(ObjectSuffix) $(IntermediateDirectory)/ff_diskio.c$(ObjectSuffix) $(IntermediateDirectory)/sd_mmc_sd_mmc.c$(ObjectSuffix) $(IntermediateDirectory)/fonts_font_rimer6x8.c$(ObjectSuffix) 
+	$(IntermediateDirectory)/src_iface_sd.c$(ObjectSuffix) $(IntermediateDirectory)/src_startup.c$(ObjectSuffix) $(IntermediateDirectory)/rshell_colours.c$(ObjectSuffix) $(IntermediateDirectory)/rshell_red.c$(ObjectSuffix) $(IntermediateDirectory)/ff_diskio.c$(ObjectSuffix) 
 
-Objects2=$(IntermediateDirectory)/tusb_dcd_samd.c$(ObjectSuffix) $(IntermediateDirectory)/tusb_tusb_fifo.c$(ObjectSuffix) $(IntermediateDirectory)/kernel_heap_4r.c$(ObjectSuffix) \
+Objects2=$(IntermediateDirectory)/sd_mmc_sd_mmc.c$(ObjectSuffix) $(IntermediateDirectory)/fonts_font_rimer6x8.c$(ObjectSuffix) $(IntermediateDirectory)/tusb_dcd_samd.c$(ObjectSuffix) $(IntermediateDirectory)/tusb_tusb_fifo.c$(ObjectSuffix) $(IntermediateDirectory)/kernel_heap_4r.c$(ObjectSuffix) \
 	$(IntermediateDirectory)/tusb_msc_device.c$(ObjectSuffix) $(IntermediateDirectory)/ff_ff.c$(ObjectSuffix) $(IntermediateDirectory)/tusb_tusb_samd51.c$(ObjectSuffix) $(IntermediateDirectory)/fonts_font_serif8x8.c$(ObjectSuffix) $(IntermediateDirectory)/bios_graph.c$(ObjectSuffix) $(IntermediateDirectory)/bios_keyboard.c$(ObjectSuffix) $(IntermediateDirectory)/fonts_font_rimer8x12.c$(ObjectSuffix) 
 
 

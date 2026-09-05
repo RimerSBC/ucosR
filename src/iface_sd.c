@@ -136,7 +136,7 @@ char *cmd_fat_block_read(_cl_param_t *sParam)
       taskYIELD(); // Wait for card is ready.
 
    if (sd_mmc_get_type(0) & (CARD_TYPE_SD | CARD_TYPE_MMC))
-      for (uint16_t i = block; i < block + count; i++)
+      for (uint32_t i = block; i < block + count; i++)
       {
          sd_mmc_init_read_blocks(0, i, 1);
          sd_mmc_start_read_blocks(sd_mmc_block, 1);
@@ -272,6 +272,7 @@ static cmd_err_t cmd_fat_cat(_cl_param_t *sParam)
             if (lCount == n)
             {
                stdio->putch(ch[i]);
+               f_close(&catFile);
                return CMD_NO_ERR;
             }
             if (lCount > uTerm.lines - 3)

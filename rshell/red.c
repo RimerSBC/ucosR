@@ -42,6 +42,7 @@
 #include <string.h>
 
 #define RED_MEM_BLOCK_SIZE 512
+#define RED_MAX_FILE_SIZE 65535
 #define RED_STAT_COL_BG RGB_COLOR_LIGHTGREY
 #define RED_STAT_COL_FG RGB_COLOR_BLUE
 #define RED_MSG_COL_BG RGB_COLOR_BLUE
@@ -361,8 +362,14 @@ bool red_process(void)
                ed.changed = true;
             case ED_CHAR:
                lastCol = ed.col;
+               if (text.length == RED_MAX_FILE_SIZE) 
+                   break;
                if (text.length == text.maxLen)
-                  vPortReAlloc(text.str, text.maxLen + RED_MEM_BLOCK_SIZE);
+               {
+                  text.maxLen = text.maxLen < (RED_MAX_FILE_SIZE-RED_MEM_BLOCK_SIZE) ? text.maxLen + RED_MEM_BLOCK_SIZE : RED_MAX_FILE_SIZE;
+                  vPortReAlloc(text.str, text.maxLen);
+                  
+               }
                if ((ed.col >= uTerm.cols - 1) && ed.row == (uTerm.lines - RED_STATUS_LINES - 1))
                {
                   red_line_up(1);
@@ -451,7 +458,8 @@ bool red_load(char *name)
    UINT br;
    if (!(*name) || (f_open(&edFile, name, FA_READ) != FR_OK))
       return false;
-   text.maxLen = (edFile.obj.objsize / RED_MEM_BLOCK_SIZE + 1) * RED_MEM_BLOCK_SIZE;
+   uint32_t fSize = (edFile.obj.objsize / RED_MEM_BLOCK_SIZE + 1) * RED_MEM_BLOCK_SIZE;
+   text.maxLen = fSize > RED_MAX_FILE_SIZE ? RED_MAX_FILE_SIZE : fSize;
    text.str = vPortReAlloc(text.str, text.maxLen);
    f_read(&edFile, text.str, edFile.obj.objsize, &br);
    f_close(&edFile);
@@ -468,7 +476,7 @@ bool red(char *fileName)
 
    if (!red_load(fileName))
    {
-      tsprintf(ed.name, *fileName ? fileName : "noname");
+      tsnprintf(ed.name,RED_FILE_NAME_LEN-1, *fileName ? fileName : "noname");
       if (!(text.str = vPortReAlloc(text.str, RED_MEM_BLOCK_SIZE)))
          return false;
       text.maxLen = RED_MEM_BLOCK_SIZE;
@@ -476,7 +484,7 @@ bool red(char *fileName)
    }
    else
    {
-      tsnprintf(ed.name, RED_FILE_NAME_LEN - 1, fileName);
+      tsnprintf(ed.name,RED_FILE_NAME_LEN-1, fileName);
    }
    statusLine = pvPortCalloc(1, uTerm.cols + 1);
    text_cls();
