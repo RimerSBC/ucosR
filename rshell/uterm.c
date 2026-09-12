@@ -96,10 +96,17 @@ void glyph_xy(uint8_t col, uint8_t row, glyph_t glyph)
 {
    uint16_t xPos = col * uTerm.font->width;
    uint16_t yPos = row * uTerm.font->height;
+   if ((col >= uTerm.cols) || (row >= uTerm.lines))
+      return;
+   glyph_t *cell = &screen[row * uTerm.cols + col];
    if (glyph.gl.c)
-      screen[row * uTerm.cols + col].data = glyph.data;
+   {
+      if (cell->data == glyph.data)
+         return;
+      cell->data = glyph.data;
+   }
    else
-      glyph.data = screen[row * uTerm.cols + col].data; // redraw the glyph
+      glyph.data = cell->data; // redraw the glyph
    const uint8_t *ptr = &uTerm.font->glyphs[(glyph.gl.c - uTerm.font->first) * uTerm.font->height * (uTerm.font->width > 8 ? 2 : 1)];
    for (uint16_t j = 0; j < uTerm.font->height; j++, ptr++)
    {
@@ -131,7 +138,7 @@ void ut_new_line(bool lineReturn)
    }
    else
    {
-      glyph_xy(uTerm.cursorCol, uTerm.cursorLine, screen[uTerm.cursorLine * uTerm.cols + uTerm.cursorCol]);
+      glyph_xy(uTerm.cursorCol, uTerm.cursorLine, (glyph_t){.gl.c = 0});
       uTerm.cursorLine++;
    }
    if (lineReturn)
@@ -176,7 +183,7 @@ void cursor_move(uint8_t line, uint8_t col)
 {
    if (!(col < uTerm.cols && line < uTerm.lines))
       return; // wrong position
-   glyph_xy(uTerm.cursorCol, uTerm.cursorLine, screen[uTerm.cursorLine * uTerm.cols + uTerm.cursorCol]);
+   glyph_xy(uTerm.cursorCol, uTerm.cursorLine, (glyph_t){.gl.c = 0});
    uTerm.cursorCol = col;
    uTerm.cursorLine = line;
 }

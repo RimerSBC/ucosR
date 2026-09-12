@@ -43,7 +43,7 @@ void editline_set(_editline_t* eLine, char* str)
 bool str_char_ins(_editline_t* eLine, char c)
 {
    if(eLine->length >= (eLine->maxLen - 2)) return false;
-   for(uint16_t i = eLine->length + 1; i > eLine->curPos; i--) eLine->str[i] = eLine->str[i - 1];
+   for(uint32_t i = eLine->length + 1; i > eLine->curPos; i--) eLine->str[i] = eLine->str[i - 1];
    eLine->str[eLine->curPos++] = c;
    eLine->length++;
    return true;

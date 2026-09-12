@@ -2,23 +2,25 @@
  * Copyright (c) 2025 Sergey Sanders
  * sergey@sesadesign.com
  * -----------------------------------------------------------------------------
- * Licensed under Creative Commons Attribution-NonCommercial-ShareAlike 4.0
- * International (CC BY-NC-SA 4.0). 
- * 
- * You are free to:
- *  - Share: Copy and redistribute the material.
- *  - Adapt: Remix, transform, and build upon the material.
- * 
- * Under the following terms:
- *  - Attribution: Give appropriate credit and indicate changes.
- *  - NonCommercial: Do not use for commercial purposes.
- *  - ShareAlike: Distribute under the same license.
- * 
- * DISCLAIMER: This work is provided "as is" without any guarantees. The authors
- * aren’t responsible for any issues, damages, or claims that come up from using
- * it. Use at your own risk!
- * 
- * Full license: http://creativecommons.org/licenses/by-nc-sa/4.0/
+ * MIT License
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
  * ---------------------------------------------------------------------------*/
 
 /**
@@ -28,8 +30,7 @@
  * @brief LLFS
  *
  * Linked List File System Module.
- * No multitasking supported 
- * 
+ *
  * @see llfs_conf.h and llfs_drv_conf.h for details.
  */
 #include "llfs.h"
@@ -40,231 +41,285 @@
 #include "string.h"
 #include "task.h"
 
-uint16_t emptyNext = 0; // LSB-count or last data if MSB is 0xFF, MSB-next valid sector, self if partially full and 0xff
-                        // if it's last full sector
+static uint16_t EmptyNext = 0; // free sector mark: COUNT and LINK both zero
 
 lf_err_t lf_error;
 
 void __attribute__((weak)) lf_init(void) {}
 
-lf_err_t lf_format(uint32_t size, uint16_t devID, char* name)
+/**
+ * @brief Format the volume: build the first index sector and release all data sectors.
+ * @param size media size in bytes, clamped to the volume sector count
+ * @param devID device ID stored in the physical descriptor
+ * @param name volume name, LLFS_VOLNAME_LEN bytes are read as is, a terminator is not
+ *        required and a shorter buffer must not be passed
+ * @return LF_ERR_NONE on success, media error otherwise
+ */
+lf_err_t lf_format(uint32_t size, uint16_t devID, char *name)
 {
-   uint16_t sPtr;
+   uint16_t sPtr = size / LLFS_SECTOR_SIZE; // requested sector count
    lf_phy_t tmpPhy = {
-      .fsType = LLFS_VOLUME_VALID,
-      .fsTypeN = (uint8_t)~LLFS_VOLUME_VALID,
-      .devID = devID,
-      .secCount = size / LLFS_SECTOR_SIZE,
-      .compress = LLFS_COMPRESS_NONE,
-      .ecc = LLFS_ECC_NONE,
+       .fsType = LLFS_VOLUME_VALID,
+       .fsTypeN = (uint8_t)~LLFS_VOLUME_VALID,
+       .devID = devID,
+       .secCount = sPtr > volumeEEPROM->phy->secCount ? volumeEEPROM->phy->secCount : sPtr,
+       .compress = LLFS_COMPRESS_NONE,
+       .ecc = LLFS_ECC_NONE,
    };
 
    memcpy(tmpPhy.name, name, LLFS_VOLNAME_LEN);
    memset(volumeEEPROM->sData, LLFS_EMPTY_BYTE, LLFS_SECTOR_SIZE);
    memcpy(volumeEEPROM->sData, &tmpPhy, sizeof(lf_phy_t));
    volumeEEPROM->sData[LLFS_SECTOR_TYPE_ADDR] = LLFS_ATTR_INDEX; /// mark sector as an index.
-   volumeEEPROM->sData[LLFS_SECTOR_NEXT_ADDR] = 0x00; // first sector is the last one
+   volumeEEPROM->sData[LLFS_SECTOR_NEXT_ADDR] = 0x00;            // first sector is the last one
+   /// the mark byte is name[11] of the INDEX record, name[10] stays 0xff so the sector is never seen as free
    volumeEEPROM->sData[LLFS_MARK_INDEX_ADDR] = LLFS_MARK_INDEX_BYTE;
-   if(volumeEEPROM->write_sector(volumeEEPROM->sData, 0))
-      for(sPtr = 1; sPtr < volumeEEPROM->phy->secCount - (volumeEEPROM->phy->secCount == 0xff) ? 1 : 0; sPtr++)
-      {
-         if(!(volumeEEPROM->set_sector_next(&emptyNext, sPtr))) return lf_error = LF_ERR_VOLUME;
-      }
+
+   if (!volumeEEPROM->write_sector(volumeEEPROM->sData, 0)) return lf_error;
+   for (sPtr = 1; sPtr < tmpPhy.secCount; sPtr++) // release the data sectors, 0xff included: only an index may claim it
+   {
+      if (!(volumeEEPROM->set_sector_next(&EmptyNext, sPtr))) return lf_error;
+   }
    return lf_error = LF_ERR_NONE;
 }
 
 #define LLFS_COUNT_UNUSED_AS_FREE 0
 
+/**
+ * @brief Get the free space of a volume.
+ * @param volIndex volume index, ignored: the EEPROM is the only volume so far
+ * @return free space in bytes
+ */
 uint32_t lf_get_free(uint8_t volIndex)
 {
    uint32_t size = 0;
    uint16_t sPtr;
    uint16_t next;
 
-   for(sPtr = 1; sPtr < volumeEEPROM->phy->secCount; sPtr++)
+   (void)volIndex;
+   for (sPtr = 1; sPtr < volumeEEPROM->phy->secCount - 1; sPtr++) // 0 is an index, the last one is reserved for the second index
    {
-      if(!volumeEEPROM->get_sector_next(&next, sPtr)) return 0;
-      if(!next) size += LLFS_SECTOR_SIZE - 1;
+      if (!volumeEEPROM->get_sector_next(&next, sPtr)) return 0;
+      if (!next) size += LLFS_SECTOR_DATA_SIZE; // COUNT and LINK zero: the sector is free
 #if LLFS_COUNT_UNUSED_AS_FREE
-      else if(next >> 8 == sPtr)
-         size += LLFS_SECTOR_SIZE - (next & 0xff) - 1;
+      else if (next >> 8 == sPtr)
+         size += LLFS_SECTOR_DATA_SIZE - (next & 0xff); // partially filled: tail of the sector
 #endif
    }
    return size;
 }
 
-/// get next free available
-/// if looking for index sector, the 0xff sector can be used
-uint16_t lf_get_free_sector()
+/**
+ * @brief Get the first free sector.
+ * @param asIndex true when the sector is requested for an index sector: 0xff may be used,
+ *        it never holds data because LINK 0xff marks the end of a chain
+ * @return sector number, 0 if the volume is full
+ */
+static uint16_t lf_get_free_sector(bool asIndex)
 {
    uint16_t sPtr;
    uint16_t next;
 
-   for(sPtr = 1; sPtr < volumeEEPROM->phy->secCount; sPtr++)
+   if (asIndex && (volumeEEPROM->phy->secCount == LLFS_MAX_SECTOR_COUNT)) // full size volume: the last sector is kept for an index
    {
-      if(!volumeEEPROM->get_sector_next(&next, sPtr)) return 0;
-      if(!next) return sPtr;
+      if (!volumeEEPROM->get_sector_next(&next, LLFS_SECTOR_LAST)) return 0;
+      if (!next) return LLFS_SECTOR_LAST;
+   }
+   for (sPtr = 1; sPtr < volumeEEPROM->phy->secCount - 1; sPtr++)
+   {
+      if (!volumeEEPROM->get_sector_next(&next, sPtr)) return 0;
+      if (!next) return sPtr;
    }
    lf_error = LF_ERR_FULL;
    return 0;
 }
 
-uint16_t lf_add_record(lf_record_t* newRecord, char* name, uint8_t attr)
+/**
+ * @brief Add a record to the first free slot, extending the index chain if needed.
+ * @param newRecord receives a copy of the new record
+ * @param name file name, truncated to LLFS_FILENAME_LEN characters
+ * @param attr record attributes, a data sector is allocated for regular files only
+ * @return record position: index sector in MSB, record number in LSB, 0 on failure
+ */
+static uint16_t lf_add_record(lf_record_t *newRecord, char *name, uint8_t attr)
 {
    uint16_t indexBlock = 0;
-   uint8_t index;
-   uint8_t rPtr;
    uint16_t next;
    uint16_t sect;
-   uint16_t pos = 0;
-   lf_record_t* iRecord;
+   uint8_t index;
+   uint8_t rPtr;
+   lf_record_t *iRecord;
 
-   while(!pos)
+   while (1)
    {
-      if(!volumeEEPROM->read_sector(volumeEEPROM->sData, indexBlock)) return 0;
-      if(!((volumeEEPROM->sData[LLFS_SECTOR_TYPE_ADDR] == LLFS_ATTR_INDEX) && (volumeEEPROM->sData[LLFS_MARK_INDEX_ADDR] == LLFS_MARK_INDEX_BYTE)))
+      if (!volumeEEPROM->read_sector(volumeEEPROM->sData, indexBlock)) return 0;
+      /// an index sector carries the INDEX attribute in the last record and a zero mark byte
+      if (!((volumeEEPROM->sData[LLFS_SECTOR_TYPE_ADDR] == LLFS_ATTR_INDEX) && (volumeEEPROM->sData[LLFS_MARK_INDEX_ADDR] == LLFS_MARK_INDEX_BYTE)))
       {
          lf_error = LF_ERR_VOLUME;
          return 0;
       }
-      rPtr = indexBlock ? 0 : sizeof(lf_record_t);
-      for(index = indexBlock ? 0 : 1; index < LLFS_SECTOR_SIZE / sizeof(lf_record_t) - 1; index++)
+      rPtr = indexBlock ? 0 : sizeof(lf_record_t); // record 0 of sector 0 holds lf_phy_t
+      for (index = indexBlock ? 0 : 1; index < LLFS_RECORD_COUNT; index++)
       {
-         if(volumeEEPROM->sData[rPtr] == LLFS_EMPTY_BYTE)
+         iRecord = (lf_record_t *)&volumeEEPROM->sData[rPtr];
+         if ((uint8_t)iRecord->name[0] == LLFS_EMPTY_BYTE) // erased slot, name[] is char: cast before comparing
          {
             uint8_t i;
-            iRecord = (lf_record_t*)&volumeEEPROM->sData[rPtr];
-            if(!(attr & 0x70))
+            if (!(attr & (LLFS_ATTR_DIR | LLFS_ATTR_LINK | LLFS_ATTR_INDEX)))
             {
-               if(!(sect = lf_get_free_sector())) return 0;
+               if (!(sect = lf_get_free_sector(false))) return 0;
                /// sect points to the available sector
-               uint16_t next = sect << 8;
-               if(!(volumeEEPROM->set_sector_next(&next, sect))) return 0;
+               next = sect << 8; // COUNT 0, LINK self: claimed and empty
+               if (!(volumeEEPROM->set_sector_next(&next, sect))) return 0;
                iRecord->fptr = sect;
             }
             else
-               iRecord->fptr = 0xff; // the iRecord is either directory,link or index
+               iRecord->fptr = LLFS_SECTOR_LAST; // the iRecord is either directory,link or index
             iRecord->attr = attr;
-            for(i = 0; i < LLFS_FILENAME_LEN && name[i]; i++) iRecord->name[i] = name[i];
-            if(i < LLFS_FILENAME_LEN) iRecord->name[i] = '\0';
-            pos = (indexBlock << 8) + index;
-            if(!volumeEEPROM->write_sector(volumeEEPROM->sData, indexBlock)) return 0;
+            iRecord->rptr = 0; // root, directories are not implemented yet
+            for (i = 0; i < LLFS_FILENAME_LEN && name[i]; i++)
+               iRecord->name[i] = name[i];
+            if (i < LLFS_FILENAME_LEN) iRecord->name[i] = '\0'; // all 12 chars used: no terminator, see lf_rname_tostr()
+            if (!volumeEEPROM->write_sector(volumeEEPROM->sData, indexBlock)) return 0;
             memcpy(newRecord, iRecord, sizeof(lf_record_t));
-            return pos;
+            return (indexBlock << 8) + index;
          }
          rPtr += sizeof(lf_record_t);
-         iRecord = (lf_record_t*)&volumeEEPROM->sData[rPtr];
       }
-      if((iRecord->attr & LLFS_ATTR_INDEX) && iRecord->fptr) { indexBlock = iRecord->fptr; }
-      else // create new index sector
+      /// the last record of an index sector points to the next one
+      iRecord = (lf_record_t *)&volumeEEPROM->sData[LLFS_SECTOR_NEXT_ADDR];
+      if ((iRecord->attr & LLFS_ATTR_INDEX) && iRecord->fptr)
       {
-         // if the volume has the maximum sectors (64KB) then check last sector for availability
-         if(!volumeEEPROM->get_sector_next(&next, LLFS_MAX_SECTOR_COUNT - 1)) return 0;
-         if((volumeEEPROM->phy->secCount == LLFS_MAX_SECTOR_COUNT) && (!next))
-         {
-            if(lf_error) return 0;
-            sect = LLFS_MAX_SECTOR_COUNT - 1;
-         }
-         else if(!(sect = lf_get_free_sector()))
-            return 0; // find next available sector
-         iRecord->fptr = sect;
-         iRecord->attr = LLFS_ATTR_INDEX;
-         iRecord->name[11] = 0xff;                                                  // mark sector as used
-         if(!volumeEEPROM->write_sector(volumeEEPROM->sData, indexBlock)) return 0; // update current sector
-         indexBlock = sect;
-         memset(volumeEEPROM->sData, 0x00, LLFS_SECTOR_SIZE);
-         volumeEEPROM->sData[LLFS_SECTOR_TYPE_ADDR] = LLFS_ATTR_INDEX; /// mark sector as an index.
-         volumeEEPROM->sData[LLFS_SECTOR_NEXT_ADDR] = 0x00; /// mark as last one
-         volumeEEPROM->sData[LLFS_MARK_INDEX_ADDR] = LLFS_MARK_INDEX_BYTE;
-         if(!volumeEEPROM->write_sector(volumeEEPROM->sData, indexBlock)) return 0; // update new sector
+         indexBlock = iRecord->fptr;
+         continue;
       }
+      if (!(sect = lf_get_free_sector(true))) return 0;
+      iRecord->fptr = sect;
+      iRecord->attr = LLFS_ATTR_INDEX;
+      if (!volumeEEPROM->write_sector(volumeEEPROM->sData, indexBlock)) return 0; // update current sector
+      indexBlock = sect;
+      memset(volumeEEPROM->sData, LLFS_EMPTY_BYTE, LLFS_SECTOR_SIZE);
+      volumeEEPROM->sData[LLFS_SECTOR_TYPE_ADDR] = LLFS_ATTR_INDEX; /// mark sector as an index.
+      volumeEEPROM->sData[LLFS_SECTOR_NEXT_ADDR] = 0x00;            /// mark as last one
+      volumeEEPROM->sData[LLFS_MARK_INDEX_ADDR] = LLFS_MARK_INDEX_BYTE;
+      if (!volumeEEPROM->write_sector(volumeEEPROM->sData, indexBlock)) return 0; // update new sector
    }
-   lf_error = LF_ERR_FULL;
-   return 0;
 }
 
-void lf_del_record(uint16_t pos)
+/**
+ * @brief Erase a record.
+ * @param pos record position as returned by lf_find_record()
+ */
+static void lf_del_record(uint16_t pos)
 {
-   uint8_t indexBlock = pos >> 8;
-   uint8_t index = pos;
-
-   if(!volumeEEPROM->read_sector(volumeEEPROM->sData, indexBlock)) return;
-   if((volumeEEPROM->sData[LLFS_SECTOR_TYPE_ADDR] == LLFS_ATTR_INDEX) && (volumeEEPROM->sData[LLFS_MARK_INDEX_ADDR] == LLFS_MARK_INDEX_BYTE))
+   uint8_t index = pos; // record number inside the index sector
+   if (index >= LLFS_RECORD_COUNT)
    {
-      memset((uint8_t*)(volumeEEPROM->sData + index * sizeof(lf_record_t)), LLFS_EMPTY_BYTE, sizeof(lf_record_t));
-      if(!volumeEEPROM->write_sector(volumeEEPROM->sData, indexBlock)) return; // update index sector
+      lf_error = LF_ERR_NOTFOUND;
+      return;
+   }
+   if (!volumeEEPROM->read_sector(volumeEEPROM->sData, pos >> 8)) return;
+   if ((volumeEEPROM->sData[LLFS_SECTOR_TYPE_ADDR] == LLFS_ATTR_INDEX) && (volumeEEPROM->sData[LLFS_MARK_INDEX_ADDR] == LLFS_MARK_INDEX_BYTE))
+   {
+      memset((uint8_t *)(volumeEEPROM->sData + index * sizeof(lf_record_t)), LLFS_EMPTY_BYTE, sizeof(lf_record_t));
+      volumeEEPROM->write_sector(volumeEEPROM->sData, pos >> 8); // update index sector
    }
    else
-      lf_error = LF_ERR_MEM;
+      lf_error = LF_ERR_VOLUME;
    return;
 }
 
-bool lf_match(char* fname, char* exp)
+/**
+ * @brief Match a record name against an expression.
+ * @param fname record name, LLFS_FILENAME_LEN chars, zero terminated only if shorter
+ * @param exp zero terminated expression, '*' stands for any number of characters
+ * @return true on match
+ */
+static bool lf_match(char *fname, char *exp)
 {
-   uint8_t i, ep;
+   uint8_t i = 0, ep = 0;                  // name and expression pointers
+   uint8_t si = 0, sep = LLFS_SECTOR_LAST; // retry point after a '*', 0xff: no '*' seen yet
 
-   if((fname[0] < '!') || (fname[0] > '~')) return false; // wrong file name
-   for(i = 0, ep = 0; i < LLFS_FILENAME_LEN && fname[i]; i++)
+   if ((fname[0] < '!') || (fname[0] > '~')) return false; // wrong file name
+   while (i < LLFS_FILENAME_LEN && fname[i])               // no terminator when all 12 chars are used
    {
-      if(exp[ep] == '*')
+      if (exp[ep] == '*')
       {
-         if(!exp[++ep])
-            return true;
-         else if(!fname[++i] || i == LLFS_FILENAME_LEN)
-            return false;           // nothing to check, the file
-         while(fname[i] != exp[ep]) // there is a character to match after asterisks.
-         {
-            if(!fname[++i] || i == LLFS_FILENAME_LEN) return false;
-         }
+         sep = ++ep;
+         si = i;
+         continue;
+      } // remember where to resume
+      if (exp[ep] && (exp[ep] == fname[i]))
+      {
+         ep++;
+         i++;
+         continue;
       }
-      if((fname[i] != exp[ep]) || (!exp[ep])) return false;
-      ep++;
+      if (sep == LLFS_SECTOR_LAST) return false; // mismatch and no '*' to fall back on
+      ep = sep;
+      i = ++si; // let the '*' swallow one more character
    }
+   while (exp[ep] == '*')
+      ep++;                         // trailing '*' matches an empty tail
    return (exp[ep]) ? false : true; // fail if there are unchecked haracter in expression
 }
 
-uint16_t lf_find_record(char* name, lf_record_t* record, uint8_t next)
+/**
+ * @brief Find a record by name or expression.
+ * @param name file name or expression, see lf_match()
+ * @param record receives a copy of the record found
+ * @param next false to start a new search, true to continue the previous one
+ * @return record position: index sector in MSB, record number in LSB, 0 if not found
+ * @note the search cursor is static, a search cannot be nested or shared between tasks
+ */
+uint16_t lf_find_record(char *name, lf_record_t *record, uint8_t next)
 {
    uint8_t indexBlock;
    uint8_t index;
-   uint16_t pos = 0;
    static uint16_t lastPos = 0;
-
-   if(!next) lastPos = 1;
+   if (!next || !lastPos) lastPos = 1;
    indexBlock = lastPos >> 8;
    index = lastPos;
-   lf_error = LF_ERR_NOTFOUND;
-   do {
-      if(volumeEEPROM->read_sector(volumeEEPROM->sData, indexBlock) != LLFS_SECTOR_SIZE) return 0;
-      if(!((volumeEEPROM->sData[LLFS_SECTOR_TYPE_ADDR] == LLFS_ATTR_INDEX) && (volumeEEPROM->sData[LLFS_MARK_INDEX_ADDR] == LLFS_MARK_INDEX_BYTE)))
-         return 0; // check that the sector is an index sector
-      for(; index < LLFS_SECTOR_SIZE / sizeof(lf_record_t) - 1; index++)
+   do
+   {
+      if (volumeEEPROM->read_sector(volumeEEPROM->sData, indexBlock) != LLFS_SECTOR_SIZE) return 0;
+      if (!((volumeEEPROM->sData[LLFS_SECTOR_TYPE_ADDR] == LLFS_ATTR_INDEX) && (volumeEEPROM->sData[LLFS_MARK_INDEX_ADDR] == LLFS_MARK_INDEX_BYTE)))
+      { // check that the sector is an index sector
+         lf_error = LF_ERR_VOLUME;
+         return 0;
+      }
+      for (; index < LLFS_RECORD_COUNT; index++)
       {
-         if(lf_match(((lf_record_t*)&volumeEEPROM->sData[index * sizeof(lf_record_t)])->name, name))
+         if (lf_match(((lf_record_t *)&volumeEEPROM->sData[index * sizeof(lf_record_t)])->name, name))
          {
-            pos = indexBlock;
-            pos = (pos << 8) + index;
-            lastPos = pos + 1;
             memcpy(record, &volumeEEPROM->sData[index * sizeof(lf_record_t)], sizeof(lf_record_t));
-            return pos;
+            lastPos = (indexBlock << 8) + index + 1; // resume after this record
+            return lastPos - 1;
          }
       }
-      lastPos = 0;
       index = 0;
-      indexBlock = volumeEEPROM->sData[LLFS_SECTOR_NEXT_ADDR];
-   } while(indexBlock); // there is another index sector to check
+      indexBlock = volumeEEPROM->sData[LLFS_SECTOR_NEXT_ADDR]; // fptr of the INDEX record
+   } while (indexBlock); // there is another index sector to check
    lastPos = 0; // no matches found
+   lf_error = LF_ERR_NOTFOUND;
    return 0;
 }
 
-char* lf_rname_tostr(char* destStr, char* name)
+/**
+ * @brief Convert a record name into a C string, this is the only safe way to read a name.
+ * @param destStr destination buffer, LLFS_FILENAME_LEN+1 bytes
+ * @param name lf_record_t::name, or any string to be truncated to LLFS_FILENAME_LEN
+ * @return destStr, always zero terminated
+ */
+char *lf_rname_tostr(char *destStr, char *name)
 {
    uint8_t i;
 
-   for(i = 0; i < LLFS_FILENAME_LEN; i++)
+   for (i = 0; i < LLFS_FILENAME_LEN; i++)
    {
       destStr[i] = name[i];
-      if(!destStr[i]) break;
+      if (!destStr[i]) break;
    }
    destStr[i] = 0; // set string termination at the end.
    return destStr;
@@ -273,321 +328,294 @@ char* lf_rname_tostr(char* destStr, char* name)
  * @brief clear data on the volume begining from the pointer
  * @mode fPtr
  */
-
-void lf_clean_data(uint8_t fPtr)
+static void lf_clean_data(uint8_t fPtr)
 {
    uint16_t next;
-
-   if(!volumeEEPROM->get_sector_next(&next, fPtr)) return;
-   volumeEEPROM->set_sector_next(&emptyNext, fPtr); // mark the sector as empty
-   while(((next & 0xff00) != 0xff00) && ((next >> 8) != fPtr))
+   while (fPtr && (fPtr != LLFS_SECTOR_LAST)) // 0 and 0xff are index sectors, they hold no data
    {
-      fPtr = next >> 8;
-      if(!volumeEEPROM->get_sector_next(&next, fPtr) || (next == 0)) return;
-      volumeEEPROM->set_sector_next(&emptyNext, fPtr);
-      if(lf_error) return;
+      if (!volumeEEPROM->get_sector_next(&next, fPtr)) return;
+      if (!volumeEEPROM->set_sector_next(&EmptyNext, fPtr)) return;     // mark the sector as empty
+      if (((next & 0xff00) == 0xff00) || ((next >> 8) == fPtr)) return; // last full or partially filled sector
+      fPtr = next >> 8;                                                 // follow the chain
    }
 }
-uint16_t lf_find_eof(uint16_t fPtr)
-{
-   uint16_t next;
 
-   if(!volumeEEPROM->get_sector_next(&next, fPtr)) return 0;
-   while(((next & 0xff00) != 0xff00) && ((next & 0xff00) != fPtr << 8))
-   {
-      fPtr = next >> 8;
-      if(!volumeEEPROM->get_sector_next(&next, fPtr)) return 0;
-   }
-   return (fPtr << 8) + (((next & 0xff00) == 0xff00) ? 0 : (next & 0x00ff));
-}
-// uint32_t lf_get_fsize(uint16_t fPtr)
 /**
-* Get file size, identified by name or if empty, by fPtr (retrived by lf_find_record)
-*/
-uint32_t lf_get_fsize(char* name, uint16_t fPtr)
+ * @brief Find the write position of the last sector of a chain.
+ * @param fPtr first sector of the file
+ * @return sector in MSB, offset in LSB, 0xff offset if the sector is full, 0 on error
+ */
+static uint16_t lf_find_eof(uint16_t fPtr)
+{
+   uint16_t next;
+   while (fPtr && (fPtr != LLFS_SECTOR_LAST))
+   {
+      if (!volumeEEPROM->get_sector_next(&next, fPtr)) return 0;
+      if ((next & 0xff00) == 0xff00) return (fPtr << 8) | LLFS_SECTOR_DATA_SIZE; // full: lf_write() chains a new sector
+      if ((next >> 8) == fPtr) return (fPtr << 8) + (next & 0x00ff);             // partially filled: COUNT is the offset
+      fPtr = next >> 8;
+   }
+   return 0;
+}
+/**
+ * Get file size, identified by name or if empty, by fPtr (retrived by lf_find_record)
+ * @param name file name, empty or NULL to use fPtr
+ * @param fPtr first sector of the file, lf_record_t::fptr
+ * @return file size in bytes
+ */
+uint32_t lf_get_fsize(char *name, uint16_t fPtr)
 {
    uint16_t next;
    uint32_t size = 0;
    lf_record_t record;
-
-   if(*name)
-      if(!(fPtr = lf_find_record(name, &record, false))) return 0;
-
-   if(!volumeEEPROM->get_sector_next(&next, fPtr)) return 0;
-   while(((next & 0xff00) != 0xff00) && ((next & 0xff00) != fPtr << 8))
+   if (name && *name)
    {
-      size += LLFS_SECTOR_SIZE - 1;
-      fPtr = next >> 8;
-      if(!volumeEEPROM->get_sector_next(&next, fPtr)) return size;
+      if (!lf_find_record(name, &record, false)) return 0;
+      fPtr = record.fptr;
    }
-
-   return size + ((uint8_t)next);
+   while (fPtr && (fPtr != LLFS_SECTOR_LAST))
+   {
+      if (!volumeEEPROM->get_sector_next(&next, fPtr)) return size;
+      if ((next & 0xff00) == 0xff00) return size + LLFS_SECTOR_DATA_SIZE; // last full sector
+      if ((next >> 8) == fPtr) return size + (next & 0x00ff);             // partially filled: COUNT byte
+      size += LLFS_SECTOR_DATA_SIZE;
+      fPtr = next >> 8;
+   }
+   return size;
 }
 /**
  * @brief Deletes file regardless of the type.
  * @mode name
  * @return
  */
-void lf_delete(char* name)
+void lf_delete(char *name)
 {
-   uint16_t pos = 0;
+   uint16_t pos;
    uint8_t next = false;
    lf_record_t record;
-
-   while((pos = lf_find_record(name, &record, next)))
+   while ((pos = lf_find_record(name, &record, next)))
    {
       next = true;
-      if(lf_error) return;
-      if(!(record.attr & (LLFS_ATTR_DIR | LLFS_ATTR_LINK | LLFS_ATTR_INDEX))) // regular file, has data
-      {
+      if (!(record.attr & (LLFS_ATTR_DIR | LLFS_ATTR_LINK | LLFS_ATTR_INDEX))) // regular file, has data
          lf_clean_data(record.fptr);
-      }
       lf_del_record(pos);
    }
    return;
 }
 
-void lf_flush(lfile_t* file) { volumeEEPROM->write_sector(file->sData, file->pos >> 8); }
-
-void lf_close(lfile_t* file)
+/**
+ * @brief Write the cached sector back to the media if it was modified.
+ * @return true on success
+ */
+static bool lf_flush(lfile_t *file)
 {
-   if(file == NULL) return;
-   if(file->mode & MODE_WRITE) lf_flush(file);
+   if (!file->changed) return true;
+   if (!volumeEEPROM->write_sector(file->sData, file->pos >> 8)) return false;
+   file->changed = 0;
+   return true;
+}
+
+/**
+ * @brief Flush and release an open file.
+ */
+void lf_close(lfile_t *file)
+{
+   if (file == NULL) return;
+   if (file->mode & MODE_WRITE) lf_flush(file);
    vPortFree(file->sData);
    vPortFree(file);
 }
 
-lfile_t* lf_open(char* name, uint8_t mode)
+/**
+ * @brief Open a file, optionally creating it.
+ * @param name file name, truncated to LLFS_FILENAME_LEN characters
+ * @param mode MODE_READ, MODE_WRITE, MODE_CREATE, MODE_APPEND combination
+ * @return open file or NULL, lf_error holds the reason
+ */
+lfile_t *lf_open(char *name, uint8_t mode)
 {
-   lfile_t* tmpFile;
-   uint8_t tmpVol = 0;
+   lfile_t *tmpFile;
    lf_record_t record;
-    
-   lf_error = LF_ERR_MEM;
-   if(!name || !*name)
+   uint16_t next; // old chain link, MODE_WRITE only
+   if (!name || !*name)
    {
       lf_error = LF_ERR_FNAME;
       return NULL;
    }
-   if (strlen(name) > LLFS_FILENAME_LEN) name[LLFS_FILENAME_LEN] = '\0';
-   if((tmpFile = pvPortMalloc(sizeof(lfile_t))) != NULL)
+   lf_error = LF_ERR_MEM;
+   if ((tmpFile = pvPortMalloc(sizeof(lfile_t))) == NULL) return NULL;
+   if ((tmpFile->sData = pvPortMalloc(LLFS_SECTOR_SIZE)) == NULL)
    {
-      if((tmpFile->sData = pvPortMalloc(LLFS_SECTOR_SIZE)) == NULL)
-      {
-         vPortFree(tmpFile);
-         return NULL;
-      }
-      if(!(tmpFile->index = lf_find_record(name, &record, 0)))
-      {
-         if(mode & MODE_CREATE) tmpFile->index = lf_add_record(&record, name, mode & 0x07);
-      }
-      if(!tmpFile->index)
+      vPortFree(tmpFile);
+      return NULL;
+   }
+   tmpFile->mode = tmpFile->changed = 0; // nothing to flush if the open fails
+   if (!(tmpFile->index = lf_find_record(name, &record, 0)))
+   {
+      if (!(mode & MODE_CREATE) || !(tmpFile->index = lf_add_record(&record, name, LLFS_ATTR_FROM_MODE(mode))))
       {
          lf_close(tmpFile);
          return NULL;
       }
-      if(lf_error)
+   }
+   if (!record.fptr || (record.fptr == LLFS_SECTOR_LAST) || (record.attr & (LLFS_ATTR_DIR | LLFS_ATTR_LINK | LLFS_ATTR_INDEX)))
+   {
+      lf_error = LF_ERR_FNAME;
+      lf_close(tmpFile);
+      return NULL;
+   }
+   tmpFile->volume = 0; // the EEPROM is the only volume so far
+   tmpFile->mode = mode;
+   tmpFile->upIndex = record.rptr; // reference to the parent directory
+   lf_rname_tostr(tmpFile->name, name);
+   tmpFile->pos = ((uint16_t)record.fptr) << 8;
+   if (mode & MODE_WRITE)
+   {
+      if (mode & MODE_APPEND)
       {
-         lf_close(tmpFile);
-         return NULL;
-      }
-      tmpFile->volume = tmpVol;
-      tmpFile->mode = mode;
-      memset(tmpFile->name,0,LLFS_FILENAME_LEN);
-      strncpy(tmpFile->name, name, LLFS_FILENAME_LEN);  
-      tmpFile->changed = 0;
-      tmpFile->dataSect = 0;
-      tmpFile->pos = ((uint16_t)record.fptr) << 8;
-
-      if(mode & MODE_WRITE)
-      {
-         if(mode & MODE_APPEND)
+         if (!(tmpFile->pos = lf_find_eof(record.fptr)))
          {
-            if(!(tmpFile->pos = lf_find_eof(record.fptr)))
-            {
-               lf_close(tmpFile);
-               return NULL;
-            }
+            lf_close(tmpFile);
+            return NULL;
          }
-         else
-         {
-            lf_clean_data(tmpFile->pos >> 8);
-            volumeEEPROM->set_sector_next(&tmpFile->pos, tmpFile->pos >> 8); // mark first sector as used empty
-         }
-      }
-      if(!volumeEEPROM->read_sector(tmpFile->sData, tmpFile->pos >> 8))
-      {
-         lf_close(tmpFile);
-         return NULL;
       }
       else
-         tmpFile->dataSect = tmpFile->pos >> 8;
+      {
+         if (!volumeEEPROM->get_sector_next(&next, record.fptr) ||       // where the old chain continues
+             !volumeEEPROM->set_sector_next(&tmpFile->pos, record.fptr)) // COUNT 0, LINK self: keep the first sector
+         {
+            lf_close(tmpFile);
+            return NULL;
+         }
+         if (((next & 0xff00) != 0xff00) && ((next >> 8) != record.fptr))
+            lf_clean_data(next >> 8); // release the tail of the old content
+      }
    }
+   if (!volumeEEPROM->read_sector(tmpFile->sData, tmpFile->pos >> 8))
+   {
+      lf_close(tmpFile);
+      return NULL;
+   }
+   tmpFile->dataSect = tmpFile->pos >> 8;
    return tmpFile;
 }
 
-uint16_t lf_write(lfile_t* file, void* data, uint16_t size)
+/**
+ * @brief Append data to a file opened for writing.
+ * @return number of bytes written, less than size if the volume is full
+ */
+uint16_t lf_write(lfile_t *file, void *data, uint16_t size)
 {
-   uint16_t bCount = 0;
-   uint16_t dPtr, chunk;
-
-   if(!file)
+   uint16_t bCount = 0; // bytes written
+   uint16_t dPtr;       // offset inside the cached sector
+   uint16_t chunk;
+   uint16_t sect;
+   if (!file || !(file->mode & MODE_WRITE))
    {
       lf_error = LF_ERR_NOTOPEN;
       return 0;
    }
-   uint16_t sect = file->pos;
    dPtr = (uint8_t)file->pos;
-   if(file->sData[LLFS_SECTOR_SIZE - 1] == 0xff) // allocate a new sector
+   while (size)
    {
-      if(!volumeEEPROM->get_sector_next(&chunk, file->pos >> 8)) return 0; // get last two bytes of the sector
-      if(!(sect = lf_get_free_sector())) return 0;                         // disk full
-      sect <<= 8;
-      chunk = (chunk & 0x00ff) | sect; // update next sector
-      volumeEEPROM->set_sector_next(&chunk, file->pos >> 8);
-      volumeEEPROM->set_sector_next(&sect, sect >> 8);
-      file->pos = sect;
-   }
-   while(size)
-   {
-      chunk = LLFS_SECTOR_SIZE - dPtr - 1;
-      if(chunk > size) chunk = size;
-      size -= chunk;
-      memcpy((uint8_t*)(file->sData + dPtr), data, chunk);
-      data += chunk;
+      if (file->sData[LLFS_SECTOR_LINK_ADDR] == LLFS_SECTOR_LAST) // cached sector is full: chain a new one
+      {
+         if (!(sect = lf_get_free_sector(false))) return bCount; // disk full
+         chunk = sect << 8;
+         /// claim the new sector first, a link into a free sector could be handed out twice
+         if (!volumeEEPROM->set_sector_next(&chunk, sect)) return bCount;           // COUNT 0, LINK self: claimed and empty
+         if (!volumeEEPROM->get_sector_next(&chunk, file->pos >> 8)) return bCount; // COUNT holds data, keep it
+         chunk = (chunk & 0x00ff) | (sect << 8);
+         if (!volumeEEPROM->set_sector_next(&chunk, file->pos >> 8)) return bCount; // link the full sector to the new one
+         memset(file->sData, LLFS_EMPTY_BYTE, LLFS_SECTOR_SIZE);                    // the cache still holds the previous sector
+         file->sData[LLFS_SECTOR_COUNT_ADDR] = 0;
+         file->sData[LLFS_SECTOR_LINK_ADDR] = (uint8_t)sect;
+         file->pos = sect << 8;
+         file->dataSect = sect;
+         dPtr = 0;
+      }
+      chunk = LLFS_SECTOR_DATA_SIZE - dPtr;
+      if (chunk > size) chunk = size;
+      memcpy(file->sData + dPtr, data, chunk);
+      data = (uint8_t *)data + chunk;
       dPtr += chunk;
+      size -= chunk;
       bCount += chunk;
-      if((dPtr) == (LLFS_SECTOR_SIZE - 1)) // sector full
+      file->changed = 1;
+      if (dPtr < LLFS_SECTOR_DATA_SIZE) // partially filled: COUNT keeps the length, lf_close() flushes it
       {
-         if(size) // it isn't the last sector, so allocate another one
-         {
-            if(!(sect = lf_get_free_sector()))
-            {
-               file->sData[LLFS_SECTOR_SIZE - 1] = 0xff; // mark last sector full
-               file->pos |= 0x00ff;
-               volumeEEPROM->write_sector(file->sData, file->pos >> 8);
-               break; // disk full, but some data has been written
-            }
-            file->sData[LLFS_SECTOR_SIZE - 1] = (uint8_t)sect;
-            sect <<= 8;
-            if(!volumeEEPROM->set_sector_next(&sect, sect >> 8)) return 0; // allocate sector
-         }
-         else
-         {
-            file->sData[LLFS_SECTOR_SIZE - 1] = 0xff; // mark last sector full
-            volumeEEPROM->write_sector(file->sData, file->pos >> 8);
-            sect = file->pos | 0x00ff; // sector full
-         }
-         if(!volumeEEPROM->write_sector(file->sData, file->pos >> 8)) return 0;
-         file->pos = sect;
+         file->sData[LLFS_SECTOR_COUNT_ADDR] = (uint8_t)dPtr;
+         file->pos = (file->pos & 0xff00) + dPtr;
+         break;
       }
-      else
-      {
-         file->sData[LLFS_SECTOR_SIZE - 2] = (uint8_t)dPtr;
-         file->pos = (file->pos & 0xff00) + (uint8_t)dPtr;
-      }
-      dPtr = 0;
+      /// sector full: COUNT became data, LINK closes the file until the next sector is chained
+      file->sData[LLFS_SECTOR_LINK_ADDR] = LLFS_SECTOR_LAST;
+      if (!volumeEEPROM->write_sector(file->sData, file->pos >> 8)) return bCount;
+      file->changed = 0;
+      file->pos |= LLFS_SECTOR_DATA_SIZE; // full sector position, the next write chains a new one
    }
    return bCount;
 }
 
-uint16_t lf_read(lfile_t* file, void* data, uint16_t size)
+/**
+ * @brief Read data from the current position.
+ * @return number of bytes read, less than size at the end of the file
+ */
+uint16_t lf_read(lfile_t *file, void *data, uint16_t size)
 {
-   uint16_t bCount = 0, sectDSize;
+   uint16_t bCount = 0; // bytes read
    uint16_t chunk;
-   uint16_t sect = file->pos >> 8;
+   uint16_t sect;
 
-   if(!file)
+   if (!file || !(file->mode & (MODE_READ | MODE_WRITE)))
    {
       lf_error = LF_ERR_NOTOPEN;
       return 0;
    }
-   while(size)
+   sect = file->pos >> 8;
+   while (size)
    {
-      if(file->dataSect != sect) // update sector data
+      if (file->dataSect != sect) // the cache holds another sector
       {
-         if(!(volumeEEPROM->read_sector(file->sData, sect)))
-            return 0; // read first sector
-         else
-            file->dataSect = sect;
+         if (!(volumeEEPROM->read_sector(file->sData, sect))) return bCount;
+         file->dataSect = sect;
       }
-      if(file->sData[LLFS_SECTOR_SIZE - 1] == (uint8_t)sect) // partially filled sector
-         sectDSize = file->sData[LLFS_SECTOR_SIZE - 2];
-      else
-         sectDSize = LLFS_SECTOR_SIZE - 1;
-
-      chunk = sectDSize - (uint8_t)file->pos;
-      if(chunk > size) chunk = size;
-      size -= chunk;
-
-      if(!chunk && (chunk < size)) // no data
+      /// LINK self: partially filled sector, COUNT is the length, otherwise the sector is full
+      chunk = (file->sData[LLFS_SECTOR_LINK_ADDR] == (uint8_t)sect) ? file->sData[LLFS_SECTOR_COUNT_ADDR] : LLFS_SECTOR_DATA_SIZE;
+      chunk = (chunk > (uint8_t)file->pos) ? chunk - (uint8_t)file->pos : 0; // bytes left in this sector
+      if (chunk > size) chunk = size;
+      if (chunk)
       {
-         if((file->sData[LLFS_SECTOR_SIZE - 1] == 0xff) || (file->sData[LLFS_SECTOR_SIZE - 1] == sect)) // last sector
-            return bCount;
-         else // jump to next sector
-         {
-            sect = file->sData[LLFS_SECTOR_SIZE - 1];
-            file->pos = sect << 8;
-         }
-      }
-      else
-      {
-         memcpy(data, (uint8_t*)(file->sData + (file->pos & 0x00ff)), chunk);
-         data += chunk;
+         memcpy(data, file->sData + (file->pos & 0x00ff), chunk);
+         data = (uint8_t *)data + chunk;
+         size -= chunk;
          bCount += chunk;
          file->pos += chunk;
       }
+      else
+      {
+         if ((file->sData[LLFS_SECTOR_LINK_ADDR] == LLFS_SECTOR_LAST) || (file->sData[LLFS_SECTOR_LINK_ADDR] == (uint8_t)sect))
+            return bCount;                          // end of file
+         sect = file->sData[LLFS_SECTOR_LINK_ADDR]; // jump to next sector
+         file->pos = sect << 8;
+      }
    }
    return bCount;
 }
 
-char* lf_gets(char* str, uint16_t size, lfile_t* file)
+/**
+ * @brief Read a line, the '\n' included, at most size-1 characters.
+ * @return str, always zero terminated, NULL at the end of the file
+ */
+char *lf_gets(char *str, uint16_t size, lfile_t *file)
 {
-   uint16_t sectDSize;
-   uint16_t dPtr = 0;
    uint16_t strPtr = 0;
-
-   if(!file)
+   if (!size--) return NULL; // keep room for the terminator
+   while (strPtr < size)
    {
-      lf_error = LF_ERR_NOTOPEN;
-      return NULL;
+      if (!lf_read(file, &str[strPtr], 1)) break; // end of file
+      if (str[strPtr++] == '\n') break;
    }
-   uint16_t sect = file->pos >> 8;
-   dPtr = (uint8_t)file->pos;
-   while(strPtr < size)
-   {
-      if(file->dataSect != sect) // update sector data
-      {
-         if(!(volumeEEPROM->read_sector(file->sData, sect)))
-            return NULL; // read first sector
-         else
-            file->dataSect = sect;
-      }
-      if(file->sData[LLFS_SECTOR_SIZE - 1] == (uint8_t)sect) // partially filled sector
-         sectDSize = file->sData[LLFS_SECTOR_SIZE - 2];
-      else
-         sectDSize = LLFS_SECTOR_SIZE - 1;
-
-      while(dPtr < sectDSize) // file->sData[dPtr] && file->sData[dPtr]!='\n' && strPtr<size)
-      {
-         if(strPtr >= size - 1) return NULL; // the line is too long
-         str[strPtr] = file->sData[dPtr++];
-         if(str[strPtr++] == '\n')
-         {
-            file->pos = (file->pos & 0xff00) + dPtr;
-            if(strPtr >= size) return NULL; // the line is too long
-            str[strPtr] = '\0';             // add end of line
-            return str;
-         }
-      } // end of sector;
-      dPtr = 0;
-      if((file->sData[LLFS_SECTOR_SIZE - 1] == 0xff) || (file->sData[LLFS_SECTOR_SIZE - 1] == sect)) // last sector
-         return NULL;
-      else // jump to next sector
-      {
-         sect = file->sData[LLFS_SECTOR_SIZE - 1];
-         file->pos = sect << 8;
-      }
-   }
-   return NULL;
+   str[strPtr] = '\0';
+   return strPtr ? str : NULL;
 }

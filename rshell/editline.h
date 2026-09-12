@@ -32,9 +32,9 @@
 typedef struct 
 {
     char *str;
-    uint16_t curPos;
-    uint16_t length;
-    uint16_t maxLen;
+    uint32_t curPos;
+    uint32_t length;
+    uint32_t maxLen;
 } _editline_t;
 
 typedef enum

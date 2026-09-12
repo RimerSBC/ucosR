@@ -10,6 +10,9 @@ The media is partitioned as follows:
 |0x01-0xFE|Data (Index[n])|
 |0xFF|Index[1]|
 
+Sector 0xFF never holds data: *LINK* 0xFF marks the end of a chain, so the value is not
+available as a sector reference. It is claimed by the second index sector instead.
+
 First index sector includes physical media and the file table:
 
 |Offset|Struct|
@@ -17,6 +20,15 @@ First index sector includes physical media and the file table:
 |0x00|*lf_phy_t*|
 |0x10-0xE0|*lf_record_t*|
 |0xF0|INDEX *lf_record_t*|
+
+The INDEX record is the last one of an index sector and overlaps the sector tail:
+`fptr` (0xF0) points to the next index sector, `attr` (0xF1) carries LLFS_ATTR_INDEX,
+`name[10]` is byte 0xFE and `name[11]` is byte 0xFF. Byte 0xFF must stay 0x00, it is the
+index sector mark, and byte 0xFE must stay non-zero, otherwise the sector is seen as free.
+The `name` field of the INDEX record is therefore not usable.
+
+A file name occupies up to 12 characters and is zero terminated only when it is shorter,
+use *lf_rname_tostr()* to read it as a string.
 
 Data sectors is organized as follows
 
@@ -27,11 +39,12 @@ Data sectors is organized as follows
 | ... |
 |Byte 253|
 |*COUNT* [Byte 254]|
-|*NEXT*|
+|*NEXT* [Byte 255]|
 
-- *COUNT*: number of valid bytes or last byte if *NEXT* is 0xFF
+- *COUNT*: number of valid bytes, or the 255th data byte if the sector is full
 - *NEXT*: 
-- - If count less than 254, then points to the current sector,
+- - If the sector is not full, then points to the current sector, *COUNT* holds the length,
 - - if sector is full, then points to the next sector,
 - - if sector is full,and no data left, then set to 0xFF.
-
+- *COUNT* and *NEXT* both zero mark a free sector, a full sector therefore carries
+  255 data bytes and a partially filled one at most 254.

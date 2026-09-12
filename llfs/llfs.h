@@ -2,23 +2,25 @@
  * Copyright (c) 2025 Sergey Sanders
  * sergey@sesadesign.com
  * -----------------------------------------------------------------------------
- * Licensed under Creative Commons Attribution-NonCommercial-ShareAlike 4.0
- * International (CC BY-NC-SA 4.0). 
- * 
- * You are free to:
- *  - Share: Copy and redistribute the material.
- *  - Adapt: Remix, transform, and build upon the material.
- * 
- * Under the following terms:
- *  - Attribution: Give appropriate credit and indicate changes.
- *  - NonCommercial: Do not use for commercial purposes.
- *  - ShareAlike: Distribute under the same license.
- * 
- * DISCLAIMER: This work is provided "as is" without any guarantees. The authors
- * aren’t responsible for any issues, damages, or claims that come up from using
- * it. Use at your own risk!
- * 
- * Full license: http://creativecommons.org/licenses/by-nc-sa/4.0/
+ * MIT License
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
  * ---------------------------------------------------------------------------*/
 
 #ifndef LLFS_H_INCLUDED
@@ -41,6 +43,11 @@
 #define LLFS_MARK_INDEX_ADDR    0xff // 
 #define LLFS_MARK_INDEX_BYTE    0x00 // Last byte in the index sector  
 
+#define LLFS_SECTOR_COUNT_ADDR	(LLFS_SECTOR_SIZE-2)	// data sector: valid byte count, holds data if the sector is full
+#define LLFS_SECTOR_LINK_ADDR	(LLFS_SECTOR_SIZE-1)	// data sector: next sector, self if partially full, 0xff if last
+#define LLFS_SECTOR_DATA_SIZE	(LLFS_SECTOR_SIZE-1)	// data bytes in a full sector, the COUNT byte becomes data
+#define LLFS_SECTOR_LAST	0xff	// LINK value of the last full sector, also the reserved index sector
+
 /// User accessable attributes
 #define LLFS_ATTR_EXEC		0x04
 #define LLFS_ATTR_WRITE		0x02
@@ -57,6 +64,12 @@
 #define MODE_READ		0x04
 #define MODE_CREATE		0x08
 #define MODE_APPEND		0x10
+
+#define LLFS_ATTR_FROM_MODE(m)	(LLFS_ATTR_FVALID |\
+				((m) & MODE_EXEC ? LLFS_ATTR_EXEC : 0) |\
+				((m) & MODE_WRITE ? LLFS_ATTR_WRITE : 0) |\
+				((m) & MODE_READ ? LLFS_ATTR_READ : 0))
+#define LLFS_RECORD_COUNT	(LLFS_SECTOR_SIZE/sizeof(lf_record_t)-1) // records per index sector, the last one is the INDEX record
 
 typedef enum
 {
@@ -103,7 +116,7 @@ typedef struct __attribute__((packed,aligned(4)))
 
 typedef struct __attribute__((packed,aligned(4)))
 {
-	uint16_t index;	// points to the first sector 
+	uint16_t index;	// record position: index sector in MSB, record number in LSB
 	uint16_t pos;  // current position
 	uint8_t *sData; // temporary sector data
 	uint8_t dataSect; // temporary sector index
@@ -114,7 +127,6 @@ typedef struct __attribute__((packed,aligned(4)))
 	uint8_t volume;
 } lfile_t;
 
-extern volume_t *volumes[];
 extern lf_err_t lf_error;
 void lf_init(void);
 lf_err_t lf_format(uint32_t size,uint16_t devID,char *name);

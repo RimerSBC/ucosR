@@ -42,7 +42,6 @@
 #include <string.h>
 
 #define RED_MEM_BLOCK_SIZE 512
-#define RED_MAX_FILE_SIZE 65535
 #define RED_STAT_COL_BG RGB_COLOR_LIGHTGREY
 #define RED_STAT_COL_FG RGB_COLOR_BLUE
 #define RED_MSG_COL_BG RGB_COLOR_BLUE
@@ -52,25 +51,26 @@
 #define RED_STAT_LINE 11
 #define RED_STAT_NAME 18
 #define RED_FILE_NAME_LEN 16
+#define RED_MAX_TEXT_LEN (0x10000 - 2 * RED_MEM_BLOCK_SIZE)
 
-enum
+typedef enum
 {
-   RENDER_FULL = 0,
-   RENDER_FROM_CURSOR,
-   RENDER_CLEAR_LAST,
-   RENDER_CURSOR_MOVE,
-};
+   RED_LOAD_OK = 0, // the whole file is in the buffer
+   RED_LOAD_NOFILE, // no such file, start a new one
+   RED_LOAD_TOOBIG, // too big for uint16_t offsets
+   RED_LOAD_NOMEM,  // no room on the heap
+   RED_LOAD_ERROR,  // short read
+} _red_load_t;
 
-_editline_t text;
+static _editline_t text;
 
-struct
+static struct
 {
    char *name;
-   uint16_t textOffset; // Character position
-   uint16_t line;       // Line number
+   uint32_t textOffset; // first character of the top displayed line
+   uint32_t line;       // line number the cursor is on, counted from 0
    bool changed;
-   uint8_t col, udCol;
-   uint8_t row;
+   uint16_t col, row; // where the cursor sits on the screen, see cursor_locate()
 } ed;
 
 static char *statusLine;
@@ -80,54 +80,80 @@ static void stat_print_at(uint8_t start, uint8_t size)
    for (uint8_t c = 0; c < size; c++)
       glyph_xy(start + c, uTerm.lines - 1, glyphChCol(statusLine[c], RED_STAT_COL_FG, RED_STAT_COL_BG));
 }
-uint16_t lineCnt(void)
+
+static uint32_t line_start(uint32_t pos) // first character of the line holding pos
 {
-   uint16_t cnt = 0;
+   while (pos && (text.str[pos - 1] != '\n'))
+      pos--;
+   return pos;
+}
+
+static uint32_t line_end(uint32_t pos) // the '\n' that closes it, or the terminator
+{
+   while (text.str[pos] && (text.str[pos] != '\n'))
+      pos++;
+   return pos;
+}
+
+static uint32_t line_next(uint32_t pos) // start of the line below, pos's own if it is the last
+{
+   uint32_t end = line_end(pos);
+   return text.str[end] ? end + 1 : line_start(pos);
+}
+
+/// same column on the line above, or as near to it as that line reaches
+static uint32_t pos_up(uint32_t pos, uint16_t aimCol)
+{
+   uint32_t start = line_start(pos), up;
+   uint32_t len; // characters on the line above
+   if (!start)
+      return pos; // already on the first line
+   up = line_start(start - 1);
+   len = (start - 1) - up;
+   return up + (len > aimCol ? aimCol : len);
+}
+
+/// same column on the line below
+static uint32_t pos_down(uint32_t pos, uint16_t aimCol)
+{
+   uint32_t end = line_end(pos), down, len;
+   if (!text.str[end])
+      return pos; // already on the last line
+   down = end + 1;
+   len = line_end(down) - down;
+   return down + (len > aimCol ? aimCol : len);
+}
+static uint32_t lineCnt(void)
+{
+   uint32_t cnt = 0;
    char *ch = text.str;
-   for (uint16_t i = 0; i < text.curPos; i++)
+   for (uint32_t i = 0; i < text.curPos; i++)
       if (*ch++ == '\n')
          cnt++;
    return cnt;
 }
-static void red_status_update(bool redraw)
-{
-   uint16_t strCol = 1;
-   uint16_t curPtr = text.curPos;
-   if (redraw) // init status line
-   {
-      memset(statusLine, ' ', uTerm.cols);
-      memcpy(statusLine, "Col     Ln", 10);
-      stat_print_at(0, uTerm.cols);
-      tsprintf(statusLine, "%s", ed.name);
-      stat_print_at(uTerm.cols - RED_FILE_NAME_LEN + 1, strlen(statusLine));
-   }
-   while (curPtr && text.str[curPtr--] != '\n')
-      strCol++;
-   tsprintf(statusLine, "%d  ", strCol);
-   stat_print_at(RED_STAT_COL, 3);
-   tsprintf(statusLine, "%d    ", ed.line + 1);
-   stat_print_at(RED_STAT_LINE, 5);
-   glyph_xy(uTerm.cols - RED_FILE_NAME_LEN, uTerm.lines - 1, glyphChCol(ed.changed ? '*' : ' ', RED_STAT_COL_FG, RED_STAT_COL_BG));
-}
 
-uint8_t strLines(void)
+static void red_status_update(void)
 {
-   uint16_t chrCount = 0, ptr = text.curPos;
-   if (text.str[ptr] == '\n')
-      return 1;                               // zero character string
-   while (ptr && (text.str[ptr - 1] != '\n')) // count from cursor back
+   uint32_t strCol = text.curPos - line_start(text.curPos) + 1;
+   uint8_t nameAt = uTerm.cols - RED_FILE_NAME_LEN + 1;
+   char num[12];
+   uint8_t len;
+   memset(statusLine, ' ', uTerm.cols);
+   memcpy(statusLine, "Col     Ln", 10);
+   tsnprintf(num, sizeof(num), "%d", strCol);
+   len = strlen(num);
+   memcpy(statusLine + RED_STAT_COL, num, len > 4 ? 4 : len);
+   tsnprintf(num, sizeof(num), "%d", ed.line + 1);
+   len = strlen(num);
+   memcpy(statusLine + RED_STAT_LINE, num, len > 5 ? 5 : len);
+   if (uTerm.cols >= (RED_FILE_NAME_LEN + RED_STAT_NAME)) // room for the name field
    {
-      ptr--;
-      chrCount++;
+      statusLine[nameAt - 1] = ed.changed ? '*' : ' ';
+      len = strlen(ed.name);
+      memcpy(statusLine + nameAt, ed.name, len > (RED_FILE_NAME_LEN - 1) ? (RED_FILE_NAME_LEN - 1) : len);
    }
-   ptr = text.curPos;
-   while (text.str[ptr] && (text.str[ptr] != '\n')) // count from cursor forward
-   {
-      ptr++;
-      chrCount++;
-   }
-
-   return uTerm.cols ? ((chrCount / uTerm.cols) + (chrCount % uTerm.cols ? 1 : 0)) : 1;
+   stat_print_at(0, uTerm.cols);
 }
 
 void red_stat_window(uint8_t width, uint8_t height, char *msg)
@@ -154,25 +180,48 @@ void red_stat_window(uint8_t width, uint8_t height, char *msg)
             break;
          continue;
       }
-      glyph_xy(c++, r, glyphChCol(*msg++, RED_MSG_COL_FG, RED_MSG_COL_BG));
+      if ((c < (left + width)) && (r < (up + height)))
+         glyph_xy(c, r, glyphChCol(*msg, RED_MSG_COL_FG, RED_MSG_COL_BG));
+      c++;
+      msg++;
    }
    cursor_move(r, c);
+}
+
+static void red_message(char *msg)
+{
+   char cc;
+   red_stat_window(24, 5, msg);
+   while (!keyboard_getch(&cc))
+      taskYIELD();
 }
 
 bool red_save(char *name)
 {
    FIL edFile;
    UINT bw;
-   if (!(*name) || (f_open(&edFile, name, FA_WRITE | FA_CREATE_ALWAYS) != FR_OK))
+   char tmpName[RED_FILE_NAME_LEN + 4]; // "name.$$$"
+   if (!(*name))
       return false;
-   f_write(&edFile, text.str, text.length, &bw);
-   f_close(&edFile);
-   if (bw == text.length)
+   tsnprintf(tmpName, sizeof(tmpName), "%s.$$$", name);
+   if (f_open(&edFile, tmpName, FA_WRITE | FA_CREATE_ALWAYS) != FR_OK)
+      return false;
+   if ((f_write(&edFile, text.str, text.length, &bw) != FR_OK) || (bw != text.length))
    {
-      ed.changed = false;
-      return true;
+      f_close(&edFile);
+      f_unlink(tmpName);
+      return false;
    }
-   return false;
+   if (f_close(&edFile) != FR_OK)
+   {
+      f_unlink(tmpName);
+      return false;
+   }
+   f_unlink(name); // may not be there yet, f_rename() would refuse to overwrite
+   if (f_rename(tmpName, name) != FR_OK)
+      return false; // the temporary file is the only copy now, leave it alone
+   ed.changed = false;
+   return true;
 }
 
 bool red_get_filename(void)
@@ -185,7 +234,7 @@ bool red_get_filename(void)
    flush_stream();
    if (res && !*ed.name)
       strcpy(ed.name, "noname");
-   red_status_update(true);
+   red_status_update();
    return res;
 }
 
@@ -208,289 +257,281 @@ bool red_exit_check(void)
             return true; // Don't save
          case 'y':
          case 'Y':
-            red_save(ed.name);
+            if (!red_save(ed.name))
+            {
+               red_message("  Save failed\n\n  Press any key");
+               return false;
+            }
             return true; // Save
          }
       taskYIELD();
    }
 }
 
-void red_line_up(uint8_t linesCount)
+static void red_window_down(uint8_t linesCount) // window moves towards the end
 {
-   if (!linesCount)
-      return;
-   while (ed.textOffset < text.length - 1)
+   while (linesCount--)
    {
-      if (text.str[ed.textOffset++] == '\n')
-      {
-         if (!--linesCount)
-            return;
-      }
+      uint32_t next = line_next(ed.textOffset);
+      if (next == ed.textOffset)
+         break; // the last line is already at the top
+      ed.textOffset = next;
    }
 }
 
-void red_line_down(uint8_t linesCount)
+static void cell_advance(char ch, uint16_t *col, uint16_t *row)
 {
-   if (!linesCount)
-      return;
-   while (ed.textOffset)
+   *col = (ch == '\n') ? uTerm.cols : *col + 1; // a newline fills the rest of the row
+   if (*col >= uTerm.cols)
    {
-      if (text.str[ed.textOffset] == '\n')
-      {
-         if (!--linesCount)
-            return;
-      }
-      ed.textOffset--;
+      *col = 0;
+      (*row)++;
    }
-   return;
 }
 
-static void red_render(uint8_t mode)
+static void cursor_locate(void)
 {
-   uint16_t charPtr = ed.textOffset;
-   uint8_t col = 0, row = 0;
-   bool print = (mode == RENDER_FULL) ? true : (text.curPos < 2) ? true :
-                                                                   false;
-   if (!text.curPos)
+   uint16_t col = 0, row = 0;
+   for (uint32_t ptr = ed.textOffset; ptr < text.curPos; ptr++)
+      cell_advance(text.str[ptr], &col, &row);
+   ed.col = col;
+   ed.row = row;
+}
+
+static void window_follow(void)
+{
+   uint16_t textRows = uTerm.lines - RED_STATUS_LINES;
+   if (text.curPos < ed.textOffset) // above the window, put its line on top
+      ed.textOffset = line_start(text.curPos);
+   cursor_locate();
+   while (ed.row >= textRows) // below it, scroll a line at a time
    {
-      ed.col = ed.row = 0;
-      cursor_move(ed.row, ed.col);
+      uint32_t was = ed.textOffset;
+      red_window_down(1);
+      if (ed.textOffset == was)
+         break; // nothing left to scroll
+      cursor_locate();
    }
-   while (text.str[charPtr])
+}
+
+static void red_render(void)
+{
+   uint32_t charPtr = ed.textOffset;
+   uint16_t col = 0, row = 0;
+   uint16_t textRows = uTerm.lines - RED_STATUS_LINES;
+   while (text.str[charPtr] && (row < textRows))
    {
       switch (text.str[charPtr])
       {
       case ' ' ... '~':
-         if (print)
-            glyph_xy(col, row, glyphChar(text.str[charPtr]));
-         col++;
+         glyph_xy(col, row, glyphChar(text.str[charPtr]));
          break;
       case '\n':
-         if (print)
-            for (; col < uTerm.cols; col++)
-               glyph_xy(col, row, glyphChar(' '));
-         else
-            col = uTerm.cols;
+         for (uint16_t c = col; c < uTerm.cols; c++)
+            glyph_xy(c, row, glyphChar(' '));
+         break;
+      default:
+         glyph_xy(col, row, glyphChar(' '));
          break;
       }
-      if (col == uTerm.cols)
-      {
-         if (row == (uTerm.lines - RED_STATUS_LINES - 1))
-            return; // last line was printed
-         col = 0;
-         row++;
-      }
+      cell_advance(text.str[charPtr], &col, &row);
       charPtr++;
-      if (charPtr == text.curPos)
-      {
-         ed.col = col;
-         ed.row = row;
-         cursor_move(ed.row, ed.col);
-         if (mode == RENDER_CURSOR_MOVE)
-            return;
-      }
-      if (charPtr == text.curPos - 1)
-         if (mode == RENDER_FROM_CURSOR || mode == RENDER_CLEAR_LAST)
-            print = true;
    }
-   for (uint8_t cc = col; cc < uTerm.cols; cc++)
-      glyph_xy(cc, row, glyphChar(' ')); // clear rest of the string
-   if ((mode == RENDER_CLEAR_LAST) && row < (uTerm.lines - RED_STATUS_LINES))
-      for (uint8_t cc = 0; cc < uTerm.cols; cc++)
-         glyph_xy(cc, row + 1, glyphChar(' ')); // clear the last string (bacspace or delete)
-   if (mode == RENDER_FULL)
-      //for (uint8_t rr = row + 1; rr < (uTerm.lines - RED_STATUS_LINES - 1); rr++)
-      for (uint8_t rr = row + 1; rr < (uTerm.lines - RED_STATUS_LINES); rr++)
-         for (uint8_t cc = 0; cc < uTerm.cols; cc++)
-            glyph_xy(cc, rr, glyphChar(' ')); // clear the last string (bacspace or delete)
+   for (; row < textRows; row++, col = 0) // blank the rest of the window
+      for (; col < uTerm.cols; col++)
+         glyph_xy(col, row, glyphChar(' '));
+   cursor_move(ed.row, ed.col);
+}
+
+static bool red_text_grow(void)
+{
+   char *newStr;
+   if (text.maxLen > (RED_MAX_TEXT_LEN - RED_MEM_BLOCK_SIZE))
+      return false; // uint16_t offsets are exhausted
+   if (!(newStr = vPortReAlloc(text.str, text.maxLen + RED_MEM_BLOCK_SIZE)))
+      return false;
+   text.str = newStr;
+   text.maxLen += RED_MEM_BLOCK_SIZE;
+   return true;
 }
 
 bool red_process(void)
 {
    char cc;
-   uint8_t lastCol = 0;
-   uint8_t lineLen;
-   uint8_t renderMode = RENDER_FROM_CURSOR;
-   _ed_stat_t edStat;
-   cursor_move(0, 0);
+   uint16_t lastCol = 0; // column to aim for when moving up or down
+   _ed_stat_t edStat = ED_IN_PROCESS;
+   window_follow();
+   red_render();
    while (1)
    {
       taskYIELD();
-      renderMode = RENDER_FROM_CURSOR;
-      if (keyboard_getch(&cc)) // if char been received
+      if (!keyboard_getch(&cc)) // nothing pressed
+         continue;
+      if (cc & KEY_CTRL_MASK)
       {
-         if (cc & KEY_CTRL_MASK)
+         cc &= ~KEY_CTRL_MASK;
+         switch (cc)
          {
-            cc &= ~KEY_CTRL_MASK;
-            switch (cc)
-            {
-            case 'S':
-               red_save(ed.name);
-               break;
-            case 'A':
-               if (red_get_filename())
-                  red_save(ed.name);
-               renderMode = RENDER_FULL;
-               break;
-            }
+         case 's':
+         case 'S':
+            if (!red_save(ed.name))
+               red_message("  Save failed\n\n  Press any key");
+            break;
+         case 'a':
+         case 'A':
+            if (red_get_filename() && !red_save(ed.name))
+               red_message("  Save failed\n\n  Press any key");
+            break;
          }
-         else
-            switch (edStat = editline(&text, cc))
-            {
-            case ED_BREAK:
-               if (!ed.changed)
-                  return true;
-               if (red_exit_check())
-                  return true;
-               renderMode = RENDER_FULL;
-               break;
-            case ED_BACKSPACE:
-            case ED_DELETE:
-               renderMode = RENDER_CLEAR_LAST;
-               lastCol = ed.col;
-               ed.line = lineCnt();
-               ed.changed = true;
-               break;
-            case ED_ENTER:
-               str_char_ins(&text, cc);
-               ed.line++;
-               if (ed.row >= (uTerm.lines - RED_STATUS_LINES - 1))
-               {
-                  red_line_up(1);
-                  renderMode = RENDER_FULL;
-               }
-               ed.changed = true;
-            case ED_CHAR:
-               lastCol = ed.col;
-               if (text.length == RED_MAX_FILE_SIZE) 
-                   break;
-               if (text.length == text.maxLen)
-               {
-                  text.maxLen = text.maxLen < (RED_MAX_FILE_SIZE-RED_MEM_BLOCK_SIZE) ? text.maxLen + RED_MEM_BLOCK_SIZE : RED_MAX_FILE_SIZE;
-                  vPortReAlloc(text.str, text.maxLen);
-                  
-               }
-               if ((ed.col >= uTerm.cols - 1) && ed.row == (uTerm.lines - RED_STATUS_LINES - 1))
-               {
-                  red_line_up(1);
-                  renderMode = RENDER_FULL;
-               }
-               ed.changed = true;
-               break;
-            case ED_UP ... ED_PGDOWN:
-               renderMode = RENDER_CURSOR_MOVE;
-               switch (edStat)
-               {
-               case ED_RIGHT:
-                  if (text.curPos < text.length)
-                     text.curPos++;
-                  lastCol = ed.col;
-                  break;
-               case ED_LEFT:
-                  if (text.curPos)
-                     text.curPos--;
-                  lastCol = ed.col;
-                  break;
-               case ED_HOME:
-                  if (text.curPos)
-                     text.curPos -= ed.col;
-                  lastCol = ed.col;
-                  break;
-               case ED_END:
-                  if (text.curPos < text.length)
-                     while (text.str[text.curPos] && (text.str[text.curPos] != '\n'))
-                        text.curPos++;
-                  lastCol = ed.col;
-                  break;
-               case ED_UP:
-                  lineLen = 0;
-                  while (text.curPos && (text.str[--text.curPos] != '\n'))
-                     ; // find current string home
-                  while (text.curPos && (text.str[--text.curPos] != '\n'))
-                     lineLen++; // find upper string home, and take its lenght
-                  if (!ed.row)
-                  {
-                     red_line_down(1);
-                     renderMode = RENDER_FULL;
-                  }
-                  if (text.curPos && text.curPos < text.length)
-                     text.curPos++;
-                  if (text.curPos < ed.textOffset)
-                     ed.textOffset = text.curPos;
-                  text.curPos += (lineLen > lastCol) ? lastCol : lineLen;
-                  break;
-               case ED_DOWN:
-                  lineLen = 0;
-                  uint8_t sLines = strLines();
-                  while ((text.curPos < text.length) && (text.str[text.curPos] != '\n'))
-                     text.curPos++; // find current string end
-                  if (text.curPos == text.length)
-                     break;
-                  text.curPos++; // skip /n
-                  if (ed.row >= (uTerm.lines - RED_STATUS_LINES - (sLines)))
-                  {
-                     red_line_up(sLines);
-                     renderMode = RENDER_FULL;
-                  }
-                  while (text.str[text.curPos + lineLen] && (text.str[text.curPos + lineLen] != '\n'))
-                     lineLen++;
-                  text.curPos += (lineLen > lastCol) ? lastCol : lineLen;
-                  break;
-               default:
-                  break;
-               }
-               ed.line = lineCnt();
-               break;
-            case ED_ESCAPE:
-               break;
-            case ED_IN_PROCESS:
-               continue;
-            }
-         red_render(renderMode);
-         red_status_update(false);
       }
+      else
+      {
+         if (text.length >= (text.maxLen - 3))
+            red_text_grow();
+         switch (edStat = editline(&text, cc))
+         {
+         case ED_BREAK:
+            if (!ed.changed)
+               return true;
+            if (red_exit_check())
+               return true;
+            break;
+         case ED_BACKSPACE:
+         case ED_DELETE:
+            ed.line = lineCnt();
+            ed.changed = true;
+            break;
+         case ED_ENTER:
+            if (!str_char_ins(&text, cc))
+               break;
+            ed.line++;
+            ed.changed = true;
+            break;
+         case ED_CHAR:
+            ed.changed = true;
+            break;
+         case ED_UP ... ED_PGDOWN:
+            switch (edStat)
+            {
+            case ED_RIGHT:
+               if (text.curPos < text.length)
+                  text.curPos++;
+               break;
+            case ED_LEFT:
+               if (text.curPos)
+                  text.curPos--;
+               break;
+            case ED_HOME:
+               text.curPos = line_start(text.curPos);
+               break;
+            case ED_END:
+               text.curPos = line_end(text.curPos);
+               break;
+            case ED_UP:
+               text.curPos = pos_up(text.curPos, lastCol);
+               break;
+            case ED_DOWN:
+               text.curPos = pos_down(text.curPos, lastCol);
+               break;
+            case ED_PGUP:
+            case ED_PGDOWN:
+            {
+               uint16_t rows = uTerm.lines - RED_STATUS_LINES - 1;
+               while (rows--)
+               {
+                  uint32_t was = text.curPos;
+                  text.curPos = (edStat == ED_PGUP) ? pos_up(text.curPos, lastCol) : pos_down(text.curPos, lastCol);
+                  if (text.curPos == was)
+                     break; // hit the top or the bottom of the text
+               }
+               break;
+            }
+            default:
+               break;
+            }
+            ed.line = lineCnt();
+            break;
+         case ED_ESCAPE:
+            break;
+         case ED_IN_PROCESS:
+            continue;
+         }
+      }
+      window_follow();
+      if ((edStat != ED_UP) && (edStat != ED_DOWN) && (edStat != ED_PGUP) && (edStat != ED_PGDOWN))
+         lastCol = ed.col; // ... and the column to come back to is the real one
+      red_render();
+      red_status_update();
    }
 }
 
-bool red_load(char *name)
+_red_load_t red_load(char *name)
 {
    FIL edFile;
    UINT br;
+   uint32_t fSize, blockLen; // file size and the buffer it needs, in full width
+   char *newStr;
    if (!(*name) || (f_open(&edFile, name, FA_READ) != FR_OK))
-      return false;
-   uint32_t fSize = (edFile.obj.objsize / RED_MEM_BLOCK_SIZE + 1) * RED_MEM_BLOCK_SIZE;
-   text.maxLen = fSize > RED_MAX_FILE_SIZE ? RED_MAX_FILE_SIZE : fSize;
-   text.str = vPortReAlloc(text.str, text.maxLen);
-   f_read(&edFile, text.str, edFile.obj.objsize, &br);
+      return RED_LOAD_NOFILE;
+   fSize = (uint32_t)edFile.obj.objsize;
+   blockLen = (fSize / RED_MEM_BLOCK_SIZE + 1) * RED_MEM_BLOCK_SIZE;
+   if (blockLen > RED_MAX_TEXT_LEN) // uint16_t offsets cannot reach that far
+   {
+      f_close(&edFile);
+      return RED_LOAD_TOOBIG;
+   }
+   if (!(newStr = vPortReAlloc(text.str, blockLen)))
+   {
+      f_close(&edFile);
+      return RED_LOAD_NOMEM;
+   }
+   text.str = newStr;
+   text.maxLen = (uint16_t)blockLen;
+   f_read(&edFile, text.str, fSize, &br);
    f_close(&edFile);
    text.length = br;
-   return edFile.obj.objsize == br ? true : false;
+   text.str[text.length] = '\0';
+   return fSize == br ? RED_LOAD_OK : RED_LOAD_ERROR;
 }
 
 bool red(char *fileName)
 {
+   _red_load_t loaded;
    memset(&ed, 0x00, sizeof(ed));
    memset(&text, 0x00, sizeof(text));
    if (!(ed.name = pvPortMalloc(RED_FILE_NAME_LEN)))
       return false;
 
-   if (!red_load(fileName))
+   if ((loaded = red_load(fileName)) == RED_LOAD_OK)
+      tsnprintf(ed.name, RED_FILE_NAME_LEN, "%s", fileName);
+   else if (loaded == RED_LOAD_NOFILE)
    {
-      tsnprintf(ed.name,RED_FILE_NAME_LEN-1, *fileName ? fileName : "noname");
+      tsnprintf(ed.name, RED_FILE_NAME_LEN, "%s", *fileName ? fileName : "noname");
       if (!(text.str = vPortReAlloc(text.str, RED_MEM_BLOCK_SIZE)))
+      {
+         vPortFree(ed.name); // CLAUDE: this exit used to leak ed.name
          return false;
+      }
       text.maxLen = RED_MEM_BLOCK_SIZE;
       editline_set(&text, "");
    }
-   else
+   else // the file is there but cannot be held: leave it alone
    {
-      tsnprintf(ed.name,RED_FILE_NAME_LEN-1, fileName);
+      tprintf(loaded == RED_LOAD_TOOBIG ? "red: %s is too big\r\n" : "red: cannot read %s\r\n", fileName);
+      vPortFree(text.str);
+      vPortFree(ed.name);
+      return false;
    }
-   statusLine = pvPortCalloc(1, uTerm.cols + 1);
+   if (!(statusLine = pvPortCalloc(1, uTerm.cols + 1)))
+   {
+      vPortFree(text.str);
+      vPortFree(ed.name);
+      return false;
+   }
    text_cls();
    taskYIELD();
-   red_render(RENDER_FULL);
-   red_status_update(true);
+   red_render();
+   red_status_update();
    red_process();
    vPortFree(statusLine);
    vPortFree(text.str);
@@ -503,11 +544,11 @@ bool red(char *fileName)
 
  * Fix BS/DELETE - Done
  * File load - Done
- * Up at the top line -
- * Down at bootom line - done
+ * Up at the top line - done, window_follow()
+ * Down at bootom line - done, window_follow()
  * ENTER at the bottom - done
- * PgUp
- * PgDn
- * Implement RENDER_FROM_CURSOR - done
-
+ * PgUp - done
+ * PgDn - done
+ * Implement RENDER_FROM_CURSOR - CLAUDE: dropped, glyph_xy() skips the cells
+   that did not change, so a full repaint costs what a partial one used to
 */
